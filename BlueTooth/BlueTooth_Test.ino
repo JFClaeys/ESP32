@@ -29,8 +29,7 @@ void TogglePINs( uint PIN_1, uint PIN_2, String LEDNames){
      digitalWrite(PIN_1, LOW); 
      digitalWrite(PIN_2, LOW);      
      s2 = "OFF";
-  } else 
-  { 
+  } else { 
     digitalWrite(PIN_1, HIGH); 
     digitalWrite(PIN_2, HIGH);      
     s2 = "ON";
@@ -43,20 +42,19 @@ void TogglePIN_Led( uint PIN, String LED_Name ) {
   if (digitalRead(PIN) == HIGH) { 
      digitalWrite(PIN, LOW); 
      s2 = "OFF";
-  } else 
-  { 
+  } else { 
     digitalWrite(PIN, HIGH); 
     s2 = "ON";
   };
   SerialBT.println("LED " + LED_Name + " turned " + s2);
 }
 
-void callback(esp_spp_cb_event_t event, esp_spp_cb_param_t *param){
-  if(event == ESP_SPP_SRV_OPEN_EVT){
+void callback(esp_spp_cb_event_t event, esp_spp_cb_param_t *param) {
+  i (event == ESP_SPP_SRV_OPEN_EVT) {
     SerialBT.println("Welcome");
   }
  
-  if(event == ESP_SPP_CLOSE_EVT ){
+  if (event == ESP_SPP_CLOSE_EVT ) {
     digitalWrite(ledPIN_1, LOW);
     digitalWrite(ledPIN_2, LOW);
   }
@@ -66,7 +64,7 @@ void callback(esp_spp_cb_event_t event, esp_spp_cb_param_t *param){
 void setup() {
   pinMode(ledPIN_1, OUTPUT);
   pinMode(ledPIN_2, OUTPUT);
-   SerialBT.register_callback(callback);
+  SerialBT.register_callback(callback);
   ToggleStatus(SerialBT.begin("ESP32Test"));
 }
 
