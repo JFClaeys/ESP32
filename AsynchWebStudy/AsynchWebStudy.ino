@@ -129,11 +129,12 @@ void setup() {
               HTTP_GET,
               [](AsyncWebServerRequest *request){
                 if (runNeo) {
-                  pixels.setPixelColor(0, pixels.Color(0, 0, 0)); // Moderately bright green color.  
+                  pixels.clear();
                   pixels.show();
                 }
-                runNeo = !runNeo;                                
-                Serial.println("Toggle runNeo");
+                runNeo = !runNeo; 
+                Serial.print("runNeo is now ");
+                Serial.println(runNeo ? "on" : "off");
                 request->send_P(200, "text/pain", "OK");
               }
             );
