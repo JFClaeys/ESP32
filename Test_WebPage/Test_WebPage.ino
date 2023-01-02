@@ -1,11 +1,12 @@
-/*********
-  Rui Santos
-  Complete project details at http://randomnerdtutorials.com  
-*********/
-
 // Load Wi-Fi library
 #include <WiFi.h>
+#include <ESPmDNS.h>
 #include <wifi_credential.h>
+
+// Assign output variables to GPIO pins
+#define RED_LED  6
+#define GREEN_LED 8
+#define BLUE_LED 7
 
 // Replace with your network credentials
 const char* ssid = HOME_WIFI_SSID;
@@ -18,12 +19,9 @@ WiFiServer server(80);
 String header;
 
 // Auxiliar variables to store the current output state
-String output26State = "off";
-String output27State = "off";
-
-// Assign output variables to GPIO pins
-const int output26 = 19;
-const int output27 = 18;
+String RED_LEDState = "off";
+String GREEN_LEDState = "off";
+String BLUE_LEDState = "off";
 
 // Current time
 unsigned long currentTime = millis();
@@ -35,11 +33,14 @@ const long timeoutTime = 2000;
 void setup() {
   Serial.begin(115200);
   // Initialize the output variables as outputs
-  pinMode(output26, OUTPUT);
-  pinMode(output27, OUTPUT);
+  pinMode(RED_LED, OUTPUT);
+  pinMode(GREEN_LED, OUTPUT);
+  pinMode(BLUE_LED, OUTPUT);  
   // Set outputs to LOW
-  digitalWrite(output26, LOW);
-  digitalWrite(output27, LOW);
+  analogWrite(RED_LED, 255);
+  analogWrite(GREEN_LED, 255);
+  analogWrite(BLUE_LED, 0);
+  delay(1000);
 
   // Connect to Wi-Fi network with SSID and password
   Serial.print("Connecting to ");
@@ -49,12 +50,25 @@ void setup() {
     delay(500);
     Serial.print(".");
   }
+  analogWrite(BLUE_LED, 255);  
+  analogWrite(RED_LED, 0);
+  delay(1000);
+
+  if(!MDNS.begin("jf-esp32")) {
+     Serial.println("Error starting mDNS");
+     return;
+  }
+  analogWrite(RED_LED, 255);
+  analogWrite(GREEN_LED, 0);  
+  delay(1000);  
+  
   // Print local IP address and start web server
   Serial.println("");
   Serial.println("WiFi connected.");
   Serial.println("IP address: ");
   Serial.println(WiFi.localIP());
   server.begin();
+  analogWrite(GREEN_LED, 255); 
 }
 
 void loop(){
@@ -78,27 +92,38 @@ void loop(){
             // HTTP headers always start with a response code (e.g. HTTP/1.1 200 OK)
             // and a content-type so the client knows what's coming, then a blank line:
             client.println("HTTP/1.1 200 OK");
+            
             client.println("Content-type:text/html");
             client.println("Connection: close");
             client.println();
             
             // turns the GPIOs on and off
-            if (header.indexOf("GET /26/on") >= 0) {
-              Serial.println("GPIO 26 on");
-              output26State = "on";
-              digitalWrite(output26, HIGH);
-            } else if (header.indexOf("GET /26/off") >= 0) {
-              Serial.println("GPIO 26 off");
-              output26State = "off";
-              digitalWrite(output26, LOW);
-            } else if (header.indexOf("GET /27/on") >= 0) {
-              Serial.println("GPIO 27 on");
-              output27State = "on";
-              digitalWrite(output27, HIGH);
-            } else if (header.indexOf("GET /27/off") >= 0) {
-              Serial.println("GPIO 27 off");
-              output27State = "off";
-              digitalWrite(output27, LOW);
+            if (header.indexOf("GET /red/on") >= 0) {
+              Serial.println("RED on");
+              RED_LEDState = "on";
+              analogWrite(RED_LED, 100);
+            } else if (header.indexOf("GET /red/off") >= 0) {
+              Serial.println("RED off");
+              RED_LEDState = "off";
+              analogWrite(RED_LED, 255);
+
+            } else if (header.indexOf("GET /green/on") >= 0) {
+              Serial.println("GREEN on");
+              GREEN_LEDState = "on";
+              analogWrite(GREEN_LED, 100);
+            } else if (header.indexOf("GET /green/off") >= 0) {
+              Serial.println("GREEN LED off");
+              GREEN_LEDState = "off";
+              analogWrite(GREEN_LED, 255);
+              
+            } else if (header.indexOf("GET /blue/on") >= 0) {
+              Serial.println("BLUE on");
+              BLUE_LEDState = "on";
+              analogWrite(BLUE_LED, 100);
+            } else if (header.indexOf("GET /blue/off") >= 0) {
+              Serial.println("BLUE LED off");
+              BLUE_LEDState = "off";
+              analogWrite(BLUE_LED, 255);
             }
             
             // Display the HTML web page
@@ -116,22 +141,33 @@ void loop(){
             client.println("<body><h1>ESP32 Web Server</h1>");
             
             // Display current state, and ON/OFF buttons for GPIO 26  
-            client.println("<p>GPIO 26 - State " + output26State + "</p>");
-            // If the output26State is off, it displays the ON button       
-            if (output26State=="off") {
-              client.println("<p><a href=\"/26/on\"><button class=\"button\">ON</button></a></p>");
+            client.println("<p>RED LED - State " + RED_LEDState + "</p>");
+            // If the RED_LEDState is off, it displays the ON button       
+            if (RED_LEDState=="off") {
+              client.println("<p><a href=\"/red/on\"><button class=\"button\">ON</button></a></p>");
             } else {
-              client.println("<p><a href=\"/26/off\"><button class=\"button button2\">OFF</button></a></p>");
+              client.println("<p><a href=\"/red/off\"><button class=\"button button2\">OFF</button></a></p>");
             } 
                
             // Display current state, and ON/OFF buttons for GPIO 27  
-            client.println("<p>GPIO 27 - State " + output27State + "</p>");
-            // If the output27State is off, it displays the ON button       
-            if (output27State=="off") {
-              client.println("<p><a href=\"/27/on\"><button class=\"button\">ON</button></a></p>");
+            client.println("<p>GREEN LED - State " + GREEN_LEDState + "</p>");
+            // If the GREEN_LEDState is off, it displays the ON button       
+            if (GREEN_LEDState=="off") {
+              client.println("<p><a href=\"/green/on\"><button class=\"button\">ON</button></a></p>");
             } else {
-              client.println("<p><a href=\"/27/off\"><button class=\"button button2\">OFF</button></a></p>");
+              client.println("<p><a href=\"/green/off\"><button class=\"button button2\">OFF</button></a></p>");
             }
+
+            // Display current state, and ON/OFF buttons for GPIO 27  
+            client.println("<p>BLUE LED - State " + BLUE_LEDState + "</p>");
+            // If the GREEN_LEDState is off, it displays the ON button       
+            if (BLUE_LEDState=="off") {
+              client.println("<p><a href=\"/blue/on\"><button class=\"button\">ON</button></a></p>");
+            } else {
+              client.println("<p><a href=\"/blue/off\"><button class=\"button button2\">OFF</button></a></p>");
+            }
+
+            
             client.println("</body></html>");
             
             // The HTTP response ends with another blank line
