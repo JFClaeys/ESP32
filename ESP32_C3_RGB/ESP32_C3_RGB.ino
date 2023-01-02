@@ -1,4 +1,5 @@
 #include <Adafruit_NeoPixel.h>
+#include <FastLED.h>
 #include <OneButton.h>
 #include <RainbowDef.h>
 
@@ -8,9 +9,9 @@
 #define BUTTON 9
 #define START_SPEED 20
 #define LED_0 0
-#define LED_BLUE 3
-#define LED_GREEN 2
-#define LED_RED 1
+#define LED_BLUE 6
+#define LED_GREEN 8
+#define LED_RED 7
 
 
 
@@ -94,8 +95,8 @@ void sineLED(byte LED, int angle)
   uint8_t blue = pgm_read_byte(lights + ((angle + 240) % CIRCLE_ANGLES));
   pixels.setPixelColor(LED, pixels.Color(red, green, blue)); // Moderately bright green color.
   
-  analogWrite(LED_RED, red);
-  analogWrite(LED_GREEN, green);
+  analogWrite(LED_RED,  red);
+  analogWrite(LED_GREEN,green);
   analogWrite(LED_BLUE, blue);  
 }
 
