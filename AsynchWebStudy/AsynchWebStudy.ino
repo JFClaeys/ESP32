@@ -2,14 +2,17 @@
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
 #include <wifi_credential.h>
+#include <ESPmDNS.h>
 #include <Adafruit_NeoPixel.h>
 #include "web_page.h"
 #include "RainbowDef.h"
+
 
 #define BLUE_LED 8
 #define GREEN_LED 10
 #define RED_LED 6
 #define NEORGB_LED 7
+
 
 #define LOOP_MS 3      // how long in ms  before iteration of colour
 
@@ -118,6 +121,11 @@ void setup() {
 
   // Print ESP Local IP Address
   Serial.println(WiFi.localIP());
+
+  if(!MDNS.begin("xiao-esp32")) {
+       Serial.println("Error starting mDNS");
+       return;
+  }  
 
   // Route for root / web page
   server.on("/", 
