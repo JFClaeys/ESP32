@@ -15,6 +15,7 @@
 #include "WiFi.h"
 
 #include <esp_mac.h>  // For the MAC2STR and MACSTR macros
+#include "ESP32_Broadcasts.h"
 
 /* Definitions */
 
@@ -54,7 +55,7 @@ public:
       digitalWrite(LED_PIN_OUT, LOW);
       return false;
     }
-    return true;    
+    return true;
   }
 };
 
@@ -97,17 +98,17 @@ void loop() {
     previousMillis = currentMillis;
     NextWaitToBroadcast = random(15,40) * 100;
     // Broadcast a message to all devices within the network
-    char data[32];
-    snprintf(data, sizeof(data), "Hello, World! #%lu", msg_count++);
+    TExchangeDataPacket aDatapacket;
+    aDatapacket.Version = LATEST_BROADCAST_PACKET_VERSION;
+    aDatapacket.ColorHueToDisplay = random(0,255);
 
-    if (!broadcast_peer.send_message((uint8_t *)data, sizeof(data))) { 
+    if (!broadcast_peer.send_message((uint8_t *)&aDatapacket, sizeof(aDatapacket))) { 
       
     }
 
   } else {
     if (currentMillis - previousMillis >= TIME_LAPSE_LED_CUTOFF) {
-      digitalWrite(LED_PIN_OUT, LOW);  
-    }  
+      digitalWrite(LED_PIN_OUT, LOW);
+    }
   } 
-  
 }

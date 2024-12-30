@@ -17,6 +17,7 @@
 
 #include <vector>
 #include "FastLED.h"
+#include "ESP32_Broadcasts.h"
 
 /* Definitions */
 #define ESPNOW_WIFI_CHANNEL 6
@@ -60,8 +61,12 @@ public:
 
   // Function to print the received messages from the master
   void onReceive(const uint8_t *data, size_t len, bool broadcast) {
+    TExchangeDataPacket aDatapacket;
     //Serial.printf("Received a message from master " MACSTR " (%s)\n", MAC2STR(addr()), broadcast ? "broadcast" : "unicast");
     //Serial.printf("  Message: %s\n", (char *)data);
+
+    memcpy(&aDatapacket, data, sizeof(aDatapacket));
+    HSVLooping = aDatapacket.ColorHueToDisplay;
     message_has_been_received = true;
     message_count_down = 10;
   }
