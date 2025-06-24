@@ -19,18 +19,19 @@
 #define FASTLED_VOLTS      5//3.3
 #define FASTLED_MAX_MA     700
 #define FASTLED_BRIGHTNESS 128
-#define FASTLED_SATURATION 255 
 #define MAX_COLOUR 255
+#define MIN_BRIGHTNESS 20
+#define MAX_BRIGHTNESS 255
 #define FASTLED_STRIP_COLOR_ORDER RGB
 #define DELAY_STATUS_LED 5
 #define DELAY_STRIPE_LEDS 75
+#define DELAY_MPU6050_READING 200
+#define STATUS_LED_STEP 1
 
 #define COLOUR_RED    0xFF0000
 #define COLOUR_GREEN  0x00FF00
 #define COLOUR_BLUE   0x0000FF 
 #define COLOUR_ORANGE 0xFF4400
-
-#define WIFI_STATUS_BLINK 5
 
 Adafruit_MPU6050 mpu;
 
@@ -43,15 +44,21 @@ const char* ssid = HOME_WIFI_SSID;
 const char* password = HOME_WIFI_PASSWORD;
 bool isWifiConnected = false;
 bool isMPUConnected = false;
-uint8_t brightness = FASTLED_BRIGHTNESS;
-uint8_t brightnessStrip = FASTLED_BRIGHTNESS;
-int brightnessStep = 1;
-int brightnessStepStrip = 1;
+uint8_t brightnessStatus = FASTLED_BRIGHTNESS; 
+uint8_t brightnessStrip = FASTLED_BRIGHTNESS; 
+char brightnessStepStatus = STATUS_LED_STEP; // these two willevolve between +1 and -1. a byte cannot go negative.
+char brightnessStepStrip = STATUS_LED_STEP;  // thus use a char instead
+float accelMagnitude = 0;
+float smoothedAccel = 0;
 
+const float ALPHA_SMOOTHING_FACTOR = 0.1;
+const float ACCEL_MINIMUM = 9.0;
+const float ACCEL_MAXIMUM = 15.0;
 
+//-----------------------------------------------------------//
 
 bool GetWIFIHasBeenConnected() {
-  const uint16_t MAX_DELAY_CONNECT = 5000;
+  const uint16_t MAX_DELAY_CONNECT = 6000;
   unsigned long startTime = millis();
 
   while ((WiFi.status() != WL_CONNECTED) && (millis() - startTime < MAX_DELAY_CONNECT)) {
@@ -63,9 +70,13 @@ bool GetWIFIHasBeenConnected() {
   return WiFi.status() == WL_CONNECTED;
 }
 
+//-----------------------------------------------------------//
+
 bool GetMPUHasBeenConnected() {
   return mpu.begin();
 }
+
+//-----------------------------------------------------------//
 
 uint32_t Wheel(byte WheelPos) {
   WheelPos = MAX_COLOUR - WheelPos;
@@ -80,15 +91,19 @@ uint32_t Wheel(byte WheelPos) {
   return strip.Color(WheelPos * 3, MAX_COLOUR - WheelPos * 3, 0);
 }
 
-uint8_t GetUpdatedBrightness( uint8_t inputBrightness, int &Step  ) {
+//-----------------------------------------------------------//
+
+uint8_t GetUpdatedBrightness( uint8_t inputBrightness, char &Step  ) {
    inputBrightness += Step;
 
   // Inverser la direction du changement d'intensité aux limites
-  if (inputBrightness <= 0 || inputBrightness >= random(230,MAX_COLOUR)) {
+  if ((inputBrightness <= 0) || (inputBrightness >= random(230, MAX_BRIGHTNESS))) {
     Step = -Step;
   }
   return inputBrightness;
 }
+
+//-----------------------------------------------------------//
 
 void rainbow() {  
   for(uint16_t i=0; i < LED_STRIP_COUNT; i++) {
@@ -102,13 +117,15 @@ void rainbow() {
   brightnessStrip = GetUpdatedBrightness(brightnessStrip, brightnessStepStrip);
 }
 
+//-----------------------------------------------------------//
+
 void setup() {
   String MCUName;
 
   strip.begin();           // INITIALIZE NeoPixel strip object (REQUIRED)
   strip.clear();
   strip.show();            // Turn OFF all pixels ASAP
-  strip.setBrightness(FASTLED_BRIGHTNESS); // Set BRIGHTNESS to about 1/5 (max = 255)
+  strip.setBrightness(MAX_BRIGHTNESS); // Set BRIGHTNESS to about 1/5 (max = 255)
 
   FastLED.setMaxPowerInVoltsAndMilliamps(FASTLED_VOLTS, FASTLED_MAX_MA);
   FastLED.addLeds<FASTLED_LED_TYPE, LED_PIN_ONBOARD, FASTLED_STRIP_COLOR_ORDER>(ledOnBoard, LED_ONBOARD_COUNT);
@@ -148,15 +165,38 @@ void setup() {
   FastLED.show(); 
 }
 
+//-----------------------------------------------------------//
+
 void loop() {
   if (isWifiConnected) {
     ArduinoOTA.handle();
   }
 
+  EVERY_N_MILLISECONDS(DELAY_MPU6050_READING) {
+    if (isMPUConnected) {
+      sensors_event_t a, g, temp;
+      mpu.getEvent(&a, &g, &temp);
+      // Calculate acceleration magnitude
+      accelMagnitude = sqrt(a.acceleration.x * a.acceleration.x + 
+                            a.acceleration.y * a.acceleration.y + 
+                            a.acceleration.z * a.acceleration.z);
+
+      // Apply smoothing filter
+      smoothedAccel = ALPHA_SMOOTHING_FACTOR * accelMagnitude + (1 - ALPHA_SMOOTHING_FACTOR) * smoothedAccel;
+  
+      // Map acceleration to LED intensity (0-255)
+      brightnessStrip = map(constrain(smoothedAccel * 10, ACCEL_MINIMUM * 10, ACCEL_MAXIMUM * 10), 
+                          ACCEL_MINIMUM * 10, 
+                          ACCEL_MAXIMUM * 10, MIN_BRIGHTNESS, MAX_BRIGHTNESS);
+      // on first attempts, it seems the brightness was going toward zero, when motionless.
+      // so it appears the system could use a minimum, all time. TBD                    
+    }
+  }
+
   EVERY_N_MILLISECONDS(DELAY_STATUS_LED) {
-    FastLED.setBrightness(brightness);
+    FastLED.setBrightness(brightnessStatus);
     FastLED.show();
-    brightness = GetUpdatedBrightness(brightness, brightnessStep);
+    brightnessStatus = GetUpdatedBrightness(brightnessStatus, brightnessStepStatus);
   }
 
   EVERY_N_MILLISECONDS(DELAY_STRIPE_LEDS) {
