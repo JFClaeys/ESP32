@@ -19,6 +19,7 @@
 #include <ESPmDNS.h>
 #include <NetworkUdp.h>
 #include <ArduinoOTA.h>
+#include "ESP32_MCU_Alias.h"
 /*required OTA includes*/
 
 #ifdef __AVR__
@@ -32,7 +33,7 @@
 #define LED_PIN_MEDIUM_STRIP 1
 #define LED_PIN_ONBOARD   7
 
-#define COLOR_STRIP_DELAY 500
+#define COLOR_STRIP_DELAY 750
 
 /*fastled*/
 #define FASTLED_DENSE_LED_TYPE   WS2812B
@@ -44,12 +45,13 @@
 #define FASTLED_STRIP_COLOR_ORDER GRB
 
 #define RUN_ON_BOARD
-#define RUN_SINGLE
+//#define RUN_SINGLE
 //#define RUN_MEDIUM
-#define RUN_MEDIUM_RANDOM
-//#define RUN_MEDIUM_FASTLED
-//#define RUN_DENSE
-#define RUN_DENSE_AS_FASTLED
+//#define RUN_MEDIUM_RANDOM
+//#define RUN_MEDIUM_AS_FASTLED
+#define RUN_DENSE
+//#define RUN_DENSE_AS_FASTLED
+//#define RUN_DENSE_RANDOM
 
 
 #if defined RUN_MEDIUM && defined RUN_MEDIUM_AS_FASTLED
@@ -70,6 +72,7 @@
 #define RUN_GREEN
 #define RUN_BLUE
 
+#define COLOUR_ORANGE 0xFF4400
 #define COLOUR_RED   0xFF0000
 #define COLOUR_GREEN 0x00FF00
 #define COLOUR_BLUE  0x0000FF // medium seems to be able to light blue when it's at 0F, contralri tothe pothers, whihch do at 08
@@ -77,10 +80,19 @@
 // How many NeoPixels are attached to the Arduino?
 #define LED_SINGLE_COUNT 1
 #define LED_ONBOARD_COUNT 1
-#define LED_STRIP_COUNT 50
+#define LED_STRIP_COUNT 25
+
+// Color balance values (0-255)
+struct ColorBalance {
+  uint8_t red;
+  uint8_t green;
+  uint8_t blue;
+};
+ColorBalance colorBalance = {255, 255, 255};
+
 //  GRB(nope)  GBR  RGB  RBG  BGR BRG
 // Declare our NeoPixel strip object:
-#ifdef RUN_ON_BOARD
+#if defined(RUN_ON_BOARD) 
 Adafruit_NeoPixel onboard(LED_ONBOARD_COUNT, LED_PIN_ONBOARD, NEO_RGB + NEO_KHZ400);
 #endif
 
@@ -89,12 +101,7 @@ Adafruit_NeoPixel single(LED_SINGLE_COUNT, LED_PIN_SINGLE, NEO_GRB + NEO_KHZ800)
 #endif
 
 #if defined(RUN_MEDIUM) || defined(RUN_MEDIUM_RANDOM)
-//#ifdef RUN_MEDIUM
   Adafruit_NeoPixel stripMedium(LED_STRIP_COUNT, LED_PIN_MEDIUM_STRIP, NEO_GRB + NEO_KHZ800);
-//#endif
-
-//#ifdef RUN_MEDIUM_RANDOM
-//  Adafruit_NeoPixel stripMedium(LED_STRIP_COUNT, LED_PIN_MEDIUM_STRIP, NEO_GRB + NEO_KHZ800);
 #endif
 
 #ifdef RUN_MEDIUM_AS_FASTLED
@@ -102,7 +109,7 @@ Adafruit_NeoPixel single(LED_SINGLE_COUNT, LED_PIN_SINGLE, NEO_GRB + NEO_KHZ800)
    //CRGB ledsMedium[LED_STRIP_COUNT];
 #endif
 
-#ifdef RUN_DENSE
+#if defined(RUN_DENSE) || defined(RUN_DENSE_RANDOM)
 Adafruit_NeoPixel stripDense(LED_STRIP_COUNT, LED_PIN_DENSE_STRIP, NEO_GRB + NEO_KHZ400);
 #endif
 
@@ -127,23 +134,37 @@ void SetupThis( Adafruit_NeoPixel *astrip ){
   astrip->setBrightness(50); // Set BRIGHTNESS to about 1/5 (max = 255)
 }
 
+bool GetWIFIHasBeenConnected() {
+  const uint16_t MAX_DELAY_CONNECT = 5000;
+  unsigned long startTime = millis();
+
+  while ((WiFi.status() != WL_CONNECTED) && (millis() - startTime < MAX_DELAY_CONNECT)) {
+    if (WiFi.status() == WL_CONNECTED) {
+      break;
+    }  
+    delay(10);
+  }
+  return WiFi.status() == WL_CONNECTED;
+}
 
 // setup() function -- runs once at startup --------------------------------
-uint8_t ledStripIntensity = 0;
+uint8_t ledStripIntensity = 125;
 unsigned long previousMillis = 0;
 unsigned long currentMillis;
 const char* ssid = HOME_WIFI_SSID;
 const char* password = HOME_WIFI_PASSWORD;
+bool isWifiConnected = false;
 uint8_t colorLoop = 0;
 
 void setup() {
+  String MCUName;
   // These lines are specifically to support the Adafruit Trinket 5V 16 MHz.
   // Any other board, you can remove this part (but no harm leaving it):
 #if defined(__AVR_ATtiny85__) && (F_CPU == 16000000)
   clock_prescale_set(clock_div_1);
 #endif
 
-  #ifdef RUN_ON_BOARD   
+  #if defined(RUN_ON_BOARD)
   SetupThis(&onboard);  
   #endif
 
@@ -164,7 +185,7 @@ void setup() {
   FastLED.addLeds<FASTLED_MEDIUM_LED_TYPE, LED_PIN_MEDIUM_STRIP, FASTLED_STRIP_COLOR_ORDER>(ledsMedium, LED_STRIP_COUNT);  
   #endif
 
-  #ifdef RUN_DENSE
+  #if defined(RUN_DENSE) || defined(RUN_DENSE_RANDOM)
   SetupThis(&stripDense);  
   #endif
 
@@ -173,33 +194,39 @@ void setup() {
   FastLED.addLeds<FASTLED_DENSE_LED_TYPE, LED_PIN_DENSE_STRIP, FASTLED_STRIP_COLOR_ORDER>(leds, LED_STRIP_COUNT);  
   #endif
 
-
-  /* required OTA setup code*/
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);
-  while (WiFi.waitForConnectResult() != WL_CONNECTED) {
-    //Serial.println("Connection Failed! Rebooting...");
-    delay(5000);
-    ESP.restart();    
-  }
-
-  // Hostname defaults to esp3232-[MAC]
-  ArduinoOTA.setHostname("ESP32_Lolin_C3_Pico_A");
-  ArduinoOTA.begin();
- /* required OTA setup code*/
-
+ 
+  isWifiConnected = GetWIFIHasBeenConnected();
+  
+  if (isWifiConnected) {
+    MCUName = getCompleteMCUNameFromChipID(getChipIDFromMacAddress());
+    ArduinoOTA.setHostname(MCUName.c_str());
+    ArduinoOTA.begin();
+  }   
 }
 
 // loop() function -- runs repeatedly as long as board is on ---------------
 
+/*****************************************************/
+/*** forward declarationd. see ColorCycling_Utils ****/
+void Color_Cycling( uint32_t color ); 
+uint32_t randomizedColor(); 
+/*****************************************************/
+
+uint8_t brightness = 128;
+int brightnessStep = 1;
+
 void loop() {
-  ArduinoOTA.handle();
+  if (isWifiConnected) {
+    ArduinoOTA.handle();
+  }
 
   // Fill along the length of the strip in various colors...
   currentMillis = millis();
   if (currentMillis - previousMillis >= COLOR_STRIP_DELAY) {
     previousMillis = currentMillis;
-  
+
     switch (colorLoop) {
       case 0 : 
         Color_Cycling(COLOUR_RED);
@@ -213,12 +240,11 @@ void loop() {
     }
     colorLoop++;
     if (colorLoop > 2) {
-     colorLoop = 0;
-    }
-
-    ledStripIntensity = ledStripIntensity + 10;
-    if (ledStripIntensity > 255) {
-      ledStripIntensity = 10;
+      colorLoop = 0;
+      ledStripIntensity = ledStripIntensity + 5;
+      if (ledStripIntensity > 255) {
+        ledStripIntensity = 10;
+      }     
     }
   }
 }
@@ -239,24 +265,9 @@ uint32_t getRandomColor(Adafruit_NeoPixel *astrip)
         // should never happen
         default:{ return astrip->Color(255, 255, 255); }
     }  
+ //  return (Red<<16 | Green<<8 | Blue);    
 }
 
-
-void colorWipe(Adafruit_NeoPixel *astrip, uint32_t color) {
-  for(int i=0;  i < astrip->numPixels(); i++) { // For each pixel in strip...
-    astrip->setPixelColor(i, color);            //  Set pixel's color (in RAM)
-  }
-  astrip->setBrightness(ledStripIntensity);
-  astrip->show();                             //  Update strip to match  
-}
-
-void colorRandomStrip( Adafruit_NeoPixel *astrip, uint32_t color) {
-  for(int i=0;  i < astrip->numPixels(); i++) { // For each pixel in strip...
-    astrip->setPixelColor(i, getRandomColor(astrip));            //  Set pixel's color (in RAM)
-  }
-  astrip->setBrightness(ledStripIntensity);
-  astrip->show();                             //  Update strip to match    
-}
 
 #if defined RUN_DENSE_AS_FASTLED || defined RUN_MEDIUM_AS_FASTLED
 void colorFastLED(CRGB aled[], uint32_t color ) {
