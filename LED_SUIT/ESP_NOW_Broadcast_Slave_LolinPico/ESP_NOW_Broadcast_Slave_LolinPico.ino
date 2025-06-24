@@ -20,10 +20,11 @@
 #include "ESP32_Broadcasts.h"
 
 /* Definitions */
-#define ESPNOW_WIFI_CHANNEL 6
+#define ESPNOW_WIFI_CHANNEL 1
 
 #define LED_TYPE   WS2812B
 #define ONBOARD_COLOR_ORDER GRB
+#define OUTSIDE_COLOR_ORDER RGB
 
 #define VOLTS          3.3
 #define MAX_MA       700
@@ -31,13 +32,17 @@
 #define SATURATION 255   /* Control the saturation of your leds */
 
 #define ONBOARD_LED_PIN 7
+#define OUTSIDE_DATA_PIN      6
 #define ON_BOARD_NUM_LEDS 1
 
 /* variables */
+CRGBArray<ON_BOARD_NUM_LEDS> leds;
 CRGBArray<ON_BOARD_NUM_LEDS> led_onBoard;
 bool message_has_been_received = true;
 byte message_count_down = 0;
 byte HSVLooping = 0;
+int32_t Wifi_channel; // get current channel in order to set it for ESPnow. i womnder why...
+
 /* Classes */
 
 // Creating a new class that inherits from the ESP_NOW_Peer class is required.
@@ -61,6 +66,8 @@ public:
 
   // Function to print the received messages from the master
   void onReceive(const uint8_t *data, size_t len, bool broadcast) {
+    leds[0] = CRGB(0,0,0);
+    FastLED.show();
     TExchangeDataPacket aDatapacket;
     //Serial.printf("Received a message from master " MACSTR " (%s)\n", MAC2STR(addr()), broadcast ? "broadcast" : "unicast");
     //Serial.printf("  Message: %s\n", (char *)data);
@@ -69,6 +76,9 @@ public:
     HSVLooping = aDatapacket.ColorHueToDisplay;
     message_has_been_received = true;
     message_count_down = 10;
+    leds[0] = CRGB(255,0,0);
+    FastLED.show();
+
   }
 };
 
@@ -82,17 +92,24 @@ std::vector<ESP_NOW_Peer_Class> masters;
 // Callback called when an unknown peer sends a message
 void register_new_master(const esp_now_recv_info_t *info, const uint8_t *data, int len, void *arg) {
   if (memcmp(info->des_addr, ESP_NOW.BROADCAST_ADDR, 6) == 0) {
+    leds[0] = CRGB(0,0,0);
+    FastLED.show();
     //Serial.printf("Unknown peer " MACSTR " sent a broadcast message\n", MAC2STR(info->src_addr));
     //Serial.println("Registering the peer as a master");
-
-    ESP_NOW_Peer_Class new_master(info->src_addr, ESPNOW_WIFI_CHANNEL, WIFI_IF_STA, NULL);
-
+    delay(500);
+    ESP_NOW_Peer_Class new_master(info->src_addr, Wifi_channel, WIFI_IF_STA, NULL);
+    leds[0] = CRGB(0,0,255);
+    FastLED.show();
+    delay(500);
     masters.push_back(new_master);
     if (!masters.back().add_peer()) {
       //Serial.println("Failed to register the new master");
       return;
     }
   } else {
+    leds[0] = CRGB(0,255,0);
+    FastLED.show();
+    delay(500);
     // The slave will only receive broadcast messages
     log_v("Received a unicast message from " MACSTR, MAC2STR(info->src_addr));
     log_v("Igorning the message");
@@ -108,8 +125,11 @@ void setup() {
  // }
 
   FastLED.setMaxPowerInVoltsAndMilliamps(VOLTS, MAX_MA);
-  FastLED.addLeds<LED_TYPE, ONBOARD_LED_PIN, ONBOARD_COLOR_ORDER>(led_onBoard, ON_BOARD_NUM_LEDS); 
+  FastLED.addLeds<LED_TYPE, ONBOARD_LED_PIN, ONBOARD_COLOR_ORDER>(led_onBoard, ON_BOARD_NUM_LEDS);  
+  //FastLED.addLeds<LED_TYPE, OUTSIDE_DATA_PIN, OUTSIDE_COLOR_ORDER>(leds, ON_BOARD_NUM_LEDS);
   led_onBoard[0] = CRGB(255,0,0);  // red, we do not have wifi yet
+  leds[0] = CRGB(0,0,0);
+
   FastLED.show();
   // Initialize the Wi-Fi module
   WiFi.mode(WIFI_STA);
@@ -120,7 +140,7 @@ void setup() {
 
   led_onBoard[0] = CRGB(0,0,255);  // blue, it seems we do
   FastLED.show();
-
+  Wifi_channel = ESPNOW_WIFI_CHANNEL; 
   //Serial.println("ESP-NOW Example - Broadcast Slave");
   //Serial.println("Wi-Fi parameters:");
   //Serial.println("  Mode: STA");
@@ -142,6 +162,7 @@ void setup() {
   //Serial.println("Setup complete. Waiting for a master to broadcast a message...");
 }
 
+byte j = 0; 
 void loop() {
   
   EVERY_N_MILLIS(50) {
@@ -154,5 +175,11 @@ void loop() {
       HSVLooping++;
     }  
   }
+
+  EVERY_N_MILLIS(10) {
+    leds[0] = CHSV((j * 2), SATURATION, BRIGHTNESS); /* The higher the value 4 the less fade there is and vice versa */ 
+    j++;
+  }
+
   FastLED.show(); 
 }

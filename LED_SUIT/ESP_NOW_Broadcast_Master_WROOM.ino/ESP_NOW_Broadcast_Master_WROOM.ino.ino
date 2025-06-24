@@ -13,21 +13,32 @@
 
 #include "ESP32_NOW.h"
 #include "WiFi.h"
+#include "FastLED.h"
 
 #include <esp_mac.h>  // For the MAC2STR and MACSTR macros
 #include "ESP32_Broadcasts.h"
 
 /* Definitions */
 
-#define ESPNOW_WIFI_CHANNEL 6
-#define LED_PIN_OUT 22 
+#define ESPNOW_WIFI_CHANNEL 1
+#define LED_PIN_OUT 12 
+#define LED_STRIP 14
 #define TIME_LAPSE_BETWEEN_BROADCAST 1500
 #define TIME_LAPSE_LED_CUTOFF 150
+
+#define VOLTS          3.3
+#define MAX_MA       700
+#define BRIGHTNESS 255   /* Control the brightness of your leds */
+#define SATURATION 255   /* Control the saturation of your leds */
+#define NUM_LEDS 1
+#define LED_TYPE   WS2812B
+#define OUTSIDE_COLOR_ORDER RGB
+
+CRGBArray<NUM_LEDS> leds;
 
 /* Classes */
 
 // Creating a new class that inherits from the ESP_NOW_Peer class is required.
-
 class ESP_NOW_Broadcast_Peer : public ESP_NOW_Peer {
 public:
   // Constructor of the class using the broadcast address
@@ -74,6 +85,9 @@ void setup() {
   pinMode(LED_PIN_OUT, OUTPUT);
   digitalWrite(LED_PIN_OUT, HIGH);
 
+  FastLED.setMaxPowerInVoltsAndMilliamps(VOLTS, MAX_MA);
+  FastLED.addLeds<LED_TYPE, LED_STRIP, OUTSIDE_COLOR_ORDER>(leds, NUM_LEDS);
+
   // Initialize the Wi-Fi module
   WiFi.mode(WIFI_STA);
   WiFi.setChannel(ESPNOW_WIFI_CHANNEL);
@@ -101,6 +115,8 @@ void loop() {
     TExchangeDataPacket aDatapacket;
     aDatapacket.Version = LATEST_BROADCAST_PACKET_VERSION;
     aDatapacket.ColorHueToDisplay = random(0,255);
+    leds[0] = CHSV(aDatapacket.ColorHueToDisplay, SATURATION, BRIGHTNESS); 
+    FastLED.show();
 
     if (!broadcast_peer.send_message((uint8_t *)&aDatapacket, sizeof(aDatapacket))) { 
       
