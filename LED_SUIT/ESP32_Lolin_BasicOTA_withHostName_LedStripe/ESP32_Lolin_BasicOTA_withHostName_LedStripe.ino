@@ -3,6 +3,7 @@
 #include "ESP32_MCU_Alias.h"
 #include <ESPmDNS.h>
 #include <NetworkUdp.h>
+
 #include <ArduinoOTA.h>
 
 #include "FastLED.h"
@@ -12,7 +13,7 @@
 #include <Adafruit_Sensor.h>
 
 #define LED_PIN_ONBOARD     7
-#define LED_PIN_STRIP      20
+#define LED_PIN_STRIP       1
 #define LED_ONBOARD_COUNT   1
 #define LED_STRIP_COUNT    25
 #define FASTLED_LED_TYPE   WS2812B
@@ -23,8 +24,10 @@
 #define MIN_BRIGHTNESS 20
 #define MAX_BRIGHTNESS 255
 #define FASTLED_STRIP_COLOR_ORDER RGB
+
+#define DELAY_STRIP_BRIGHTNESS 10
 #define DELAY_STATUS_LED 5
-#define DELAY_STRIPE_LEDS 75
+#define DELAY_STRIPE_LEDS 25
 #define DELAY_MPU6050_READING 200
 #define STATUS_LED_STEP 1
 
@@ -114,7 +117,7 @@ void rainbow() {
   pixelCycle++;                             //  Advance current cycle
   if(pixelCycle >= MAX_COLOUR+1)
     pixelCycle = 0;                         //  Loop the cycle back to the begining
-  brightnessStrip = GetUpdatedBrightness(brightnessStrip, brightnessStepStrip);
+  //brightnessStrip = GetUpdatedBrightness(brightnessStrip, brightnessStepStrip);
 }
 
 //-----------------------------------------------------------//
@@ -185,9 +188,9 @@ void loop() {
       smoothedAccel = ALPHA_SMOOTHING_FACTOR * accelMagnitude + (1 - ALPHA_SMOOTHING_FACTOR) * smoothedAccel;
   
       // Map acceleration to LED intensity (0-255)
-      brightnessStrip = map(constrain(smoothedAccel * 10, ACCEL_MINIMUM * 10, ACCEL_MAXIMUM * 10), 
-                          ACCEL_MINIMUM * 10, 
-                          ACCEL_MAXIMUM * 10, MIN_BRIGHTNESS, MAX_BRIGHTNESS);
+      //brightnessStrip = map(constrain(smoothedAccel * 10, ACCEL_MINIMUM * 10, ACCEL_MAXIMUM * 10), 
+      //                    ACCEL_MINIMUM * 10, 
+      //                    ACCEL_MAXIMUM * 10, MIN_BRIGHTNESS, MAX_BRIGHTNESS);
       // on first attempts, it seems the brightness was going toward zero, when motionless.
       // so it appears the system could use a minimum, all time. TBD                    
     }
@@ -197,6 +200,10 @@ void loop() {
     FastLED.setBrightness(brightnessStatus);
     FastLED.show();
     brightnessStatus = GetUpdatedBrightness(brightnessStatus, brightnessStepStatus);
+  }
+
+  EVERY_N_MILLISECONDS(DELAY_STRIP_BRIGHTNESS){
+    brightnessStrip = GetUpdatedBrightness(brightnessStrip, brightnessStepStrip);
   }
 
   EVERY_N_MILLISECONDS(DELAY_STRIPE_LEDS) {
