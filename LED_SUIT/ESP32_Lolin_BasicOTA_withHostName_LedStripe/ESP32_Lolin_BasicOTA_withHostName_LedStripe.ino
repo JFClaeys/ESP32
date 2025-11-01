@@ -4,6 +4,7 @@
 #include <ESPmDNS.h>
 #include <NetworkUdp.h>
 
+#include <OneButton.h>
 #include <ArduinoOTA.h>
 
 #include "FastLED.h"
@@ -14,6 +15,7 @@
 
 #define LED_PIN_ONBOARD     7
 #define LED_PIN_STRIP       1
+#define BUTTON_PIN          0
 #define LED_ONBOARD_COUNT   1
 #define LED_STRIP_COUNT    25
 #define FASTLED_LED_TYPE   WS2812B
@@ -27,16 +29,20 @@
 
 #define DELAY_STRIP_BRIGHTNESS 10
 #define DELAY_STATUS_LED 5
-#define DELAY_STRIPE_LEDS 25
+#define DELAY_STRIPE_LEDS 20
 #define DELAY_MPU6050_READING 200
+#define DELAY_BUTTON_READING 1
 #define STATUS_LED_STEP 1
 
 #define COLOUR_RED    0xFF0000
 #define COLOUR_GREEN  0x00FF00
 #define COLOUR_BLUE   0x0000FF 
 #define COLOUR_ORANGE 0xFF4400
+#define COLOUR_WHITE  0xFFFFFF
 
-Adafruit_MPU6050 mpu;
+#define CLICK_MS_DURATION 120
+
+Adafruit_MPU6050 mpu; // copnnected to pins 10 and 8 (SCL / SDA) . no interrupt pin (yet)
 
 Adafruit_NeoPixel strip(LED_STRIP_COUNT, LED_PIN_STRIP, NEO_GRB + NEO_KHZ800);
 CRGBArray<LED_ONBOARD_COUNT> ledOnBoard;
@@ -53,12 +59,41 @@ char brightnessStepStatus = STATUS_LED_STEP; // these two willevolve between +1 
 char brightnessStepStrip = STATUS_LED_STEP;  // thus use a char instead
 float accelMagnitude = 0;
 float smoothedAccel = 0;
+CRGB finalColourOfSingleLED;
+
+
+bool ButtonSaidGoToSleep = false;
+bool SleepModeHasBeenActivated = false;
 
 const float ALPHA_SMOOTHING_FACTOR = 0.1;
 const float ACCEL_MINIMUM = 9.0;
 const float ACCEL_MAXIMUM = 15.0;
 
 //-----------------------------------------------------------//
+void onSinglePressed() {
+  ButtonSaidGoToSleep = !ButtonSaidGoToSleep;
+}
+
+class Button{
+private:
+  OneButton button;
+public:
+  explicit Button(uint8_t pin):button(pin) {
+    button.setClickMs(CLICK_MS_DURATION);
+    button.attachClick([](void *scope) { ((Button *) scope)->Clicked();}, this);
+  }
+
+  void Clicked() {
+    onSinglePressed();
+  }
+
+  void read() {
+    button.tick();
+  }
+};
+
+Button button(BUTTON_PIN);
+
 
 bool GetWIFIHasBeenConnected() {
   const uint16_t MAX_DELAY_CONNECT = 6000;
@@ -123,6 +158,8 @@ void rainbow() {
 //-----------------------------------------------------------//
 
 void setup() {
+  esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
+
   String MCUName;
 
   strip.begin();           // INITIALIZE NeoPixel strip object (REQUIRED)
@@ -165,14 +202,29 @@ void setup() {
       }
     } // there are no other condition, 
   }   //other than all disconnected, which is alread defined as RED, above
+  finalColourOfSingleLED = ledOnBoard[0];
   FastLED.show(); 
+
+  pinMode(BUTTON_PIN, INPUT_PULLUP);  
 }
 
 //-----------------------------------------------------------//
 
-void loop() {
+void loop() { 
   if (isWifiConnected) {
     ArduinoOTA.handle();
+  }
+
+
+  EVERY_N_MILLISECONDS(DELAY_BUTTON_READING) {
+    button.read();
+  }
+
+  if (ButtonSaidGoToSleep) {
+    //esp_sleep_enable_ext0_wakeup(BUTTON_PIN, 1);
+    //esp_deep_sleep_start();
+    ledOnBoard[0] = COLOUR_WHITE;
+    FastLED.show();
   }
 
   EVERY_N_MILLISECONDS(DELAY_MPU6050_READING) {
@@ -197,16 +249,24 @@ void loop() {
   }
 
   EVERY_N_MILLISECONDS(DELAY_STATUS_LED) {
-    FastLED.setBrightness(brightnessStatus);
-    FastLED.show();
-    brightnessStatus = GetUpdatedBrightness(brightnessStatus, brightnessStepStatus);
+    if (!ButtonSaidGoToSleep) {
+      ledOnBoard[0] = finalColourOfSingleLED;
+
+      FastLED.setBrightness(brightnessStatus);
+      FastLED.show();
+      brightnessStatus = GetUpdatedBrightness(brightnessStatus, brightnessStepStatus);
+    }
   }
 
   EVERY_N_MILLISECONDS(DELAY_STRIP_BRIGHTNESS){
-    brightnessStrip = GetUpdatedBrightness(brightnessStrip, brightnessStepStrip);
+    if (!ButtonSaidGoToSleep) {
+      brightnessStrip = GetUpdatedBrightness(brightnessStrip, brightnessStepStrip);
+    }  
   }
 
   EVERY_N_MILLISECONDS(DELAY_STRIPE_LEDS) {
-    rainbow();
-  }  
+    if (!ButtonSaidGoToSleep) {
+      rainbow();
+    }
+  }
 }
