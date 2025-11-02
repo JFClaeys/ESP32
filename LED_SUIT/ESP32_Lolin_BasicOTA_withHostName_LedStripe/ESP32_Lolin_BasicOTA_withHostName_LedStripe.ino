@@ -16,6 +16,8 @@
 #define LED_PIN_ONBOARD     7
 #define LED_PIN_STRIP       1
 #define BUTTON_PIN          0
+// pin 3, {9, 10,} 18, 19
+
 #define LED_ONBOARD_COUNT   1
 #define LED_STRIP_COUNT    25
 #define FASTLED_LED_TYPE   WS2812B
@@ -42,6 +44,16 @@
 
 #define CLICK_MS_DURATION 120
 
+enum LedsActivityStatus {
+  LEDS_CYCLING,            // system is normal
+  LEDS_NO_CYCLING,         // system is silent.
+  LEDS_TO_BE_TURNED_OFF,   // button pressed asked to turn off leds
+  LEDS_TURNED_OFF,         // system has turned leds off, i.e: set them black and no mouyre cycling
+  LEDS_TO_BE_TURNED_ON,    // button pressed asked to turn on leds
+  LEDS_TURNED_ON,          // system has turned leds on, i.e: resumed cycling
+  LEDS_PREPARE_FOR_SLEEP,  // future case
+};
+
 Adafruit_MPU6050 mpu; // copnnected to pins 10 and 8 (SCL / SDA) . no interrupt pin (yet)
 
 Adafruit_NeoPixel strip(LED_STRIP_COUNT, LED_PIN_STRIP, NEO_GRB + NEO_KHZ800);
@@ -65,14 +77,26 @@ CRGB finalColourOfSingleLED;
 bool ButtonSaidGoToSleep = false;
 bool SleepModeHasBeenActivated = false;
 
+LedsActivityStatus ledSystemStat = LEDS_CYCLING;
+
 const float ALPHA_SMOOTHING_FACTOR = 0.1;
 const float ACCEL_MINIMUM = 9.0;
 const float ACCEL_MAXIMUM = 15.0;
 
 //-----------------------------------------------------------//
+
 void onSinglePressed() {
-  ButtonSaidGoToSleep = !ButtonSaidGoToSleep;
+  switch (ledSystemStat) {
+    case LEDS_CYCLING: 
+      ledSystemStat = LEDS_TO_BE_TURNED_OFF;
+      break;
+    case LEDS_NO_CYCLING:
+      ledSystemStat = LEDS_TO_BE_TURNED_ON;
+      break;      
+  } 
 }
+
+//-----------------------------------------------------------//
 
 class Button{
 private:
@@ -94,6 +118,7 @@ public:
 
 Button button(BUTTON_PIN);
 
+//-----------------------------------------------------------//
 
 bool GetWIFIHasBeenConnected() {
   const uint16_t MAX_DELAY_CONNECT = 6000;
@@ -144,6 +169,10 @@ uint8_t GetUpdatedBrightness( uint8_t inputBrightness, char &Step  ) {
 //-----------------------------------------------------------//
 
 void rainbow() {  
+  if (ledSystemStat != LEDS_CYCLING) {
+    return;
+  }  
+
   for(uint16_t i=0; i < LED_STRIP_COUNT; i++) {
     strip.setPixelColor(i, Wheel((i + pixelCycle) & MAX_COLOUR)); //  Update delay time  
   }
@@ -220,15 +249,42 @@ void loop() {
     button.read();
   }
 
-  if (ButtonSaidGoToSleep) {
-    //esp_sleep_enable_ext0_wakeup(BUTTON_PIN, 1);
-    //esp_deep_sleep_start();
-    ledOnBoard[0] = COLOUR_WHITE;
-    FastLED.show();
+  EVERY_N_MILLISECONDS(DELAY_BUTTON_READING) {
+    switch (ledSystemStat) {
+      case LEDS_CYCLING: break;        // normal
+      case LEDS_NO_CYCLING: break;     // system is silent.
+      case LEDS_TO_BE_TURNED_OFF:
+        strip.setBrightness(0);        // button pressed asked to turn off leds
+        strip.show();
+        ledSystemStat = LEDS_TURNED_OFF;
+        break;
+      case LEDS_TURNED_OFF:            // system has turned leds off, i.e: set them black and no mouyre cycling
+        //esp_sleep_enable_ext0_wakeup(BUTTON_PIN, 1);
+        //esp_deep_sleep_start();
+        ledOnBoard[0] = COLOUR_WHITE;
+        FastLED.show(); 
+        ledSystemStat = LEDS_NO_CYCLING;
+        break;
+      case LEDS_TO_BE_TURNED_ON:       // button pressed asked to turn on leds
+        strip.setBrightness(brightnessStrip);
+        ledSystemStat = LEDS_TURNED_ON;
+        break;
+      case LEDS_TURNED_ON:             // system has turned leds on, i.e: resumed cycling
+        ledOnBoard[0] = finalColourOfSingleLED;
+        FastLED.setBrightness(brightnessStatus);
+        FastLED.show();      
+        ledSystemStat = LEDS_CYCLING;
+        break;
+      case LEDS_PREPARE_FOR_SLEEP: break;  // future case
+    }
   }
 
   EVERY_N_MILLISECONDS(DELAY_MPU6050_READING) {
     if (isMPUConnected) {
+      if (ledSystemStat != LEDS_CYCLING){
+        return;
+      }
+
       sensors_event_t a, g, temp;
       mpu.getEvent(&a, &g, &temp);
       // Calculate acceleration magnitude
@@ -249,24 +305,21 @@ void loop() {
   }
 
   EVERY_N_MILLISECONDS(DELAY_STATUS_LED) {
-    if (!ButtonSaidGoToSleep) {
-      ledOnBoard[0] = finalColourOfSingleLED;
 
-      FastLED.setBrightness(brightnessStatus);
-      FastLED.show();
+    if (ledSystemStat == LEDS_CYCLING) {
       brightnessStatus = GetUpdatedBrightness(brightnessStatus, brightnessStepStatus);
-    }
+      FastLED.setBrightness(brightnessStatus);
+      FastLED.show();         
+    }  
   }
 
   EVERY_N_MILLISECONDS(DELAY_STRIP_BRIGHTNESS){
-    if (!ButtonSaidGoToSleep) {
+    if (ledSystemStat == LEDS_CYCLING) {
       brightnessStrip = GetUpdatedBrightness(brightnessStrip, brightnessStepStrip);
     }  
   }
 
   EVERY_N_MILLISECONDS(DELAY_STRIPE_LEDS) {
-    if (!ButtonSaidGoToSleep) {
-      rainbow();
-    }
+    rainbow();
   }
 }
