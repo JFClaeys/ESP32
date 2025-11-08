@@ -13,9 +13,13 @@
 #include <Adafruit_MPU6050.h>
 #include <Adafruit_Sensor.h>
 
-#define LED_PIN_ONBOARD     7
-#define LED_PIN_STRIP       1
-#define BUTTON_PIN          0
+#define LED_PIN_ONBOARD      7
+#define LED_PIN_STRIP        1
+#define BUTTON_ONOFF_PIN     0
+#define BUTTON_INTENSITY_PIN 3
+#define MOSFET_CTRL_PIN     21
+#define SCL_PIN             10  // mpu6050
+#define SDA_PIN              8  // mpu6050
 // pin 3, {9, 10,} 18, 19
 
 #define LED_ONBOARD_COUNT   1
@@ -41,6 +45,7 @@
 #define COLOUR_BLUE   0x0000FF 
 #define COLOUR_ORANGE 0xFF4400
 #define COLOUR_WHITE  0xFFFFFF
+#define COLOUR_BLACK  0x000000
 
 #define CLICK_MS_DURATION 120
 
@@ -54,7 +59,7 @@ enum LedsActivityStatus {
   LEDS_PREPARE_FOR_SLEEP,  // future case
 };
 
-Adafruit_MPU6050 mpu; // copnnected to pins 10 and 8 (SCL / SDA) . no interrupt pin (yet)
+Adafruit_MPU6050 mpu;      // connected to pins 10 and 8 (SCL / SDA) . no interrupt pin (yet)
 
 Adafruit_NeoPixel strip(LED_STRIP_COUNT, LED_PIN_STRIP, NEO_GRB + NEO_KHZ800);
 CRGBArray<LED_ONBOARD_COUNT> ledOnBoard;
@@ -65,14 +70,15 @@ const char* ssid = HOME_WIFI_SSID;
 const char* password = HOME_WIFI_PASSWORD;
 bool isWifiConnected = false;
 bool isMPUConnected = false;
+
 uint8_t brightnessStatus = FASTLED_BRIGHTNESS; 
 uint8_t brightnessStrip = FASTLED_BRIGHTNESS; 
 char brightnessStepStatus = STATUS_LED_STEP; // these two willevolve between +1 and -1. a byte cannot go negative.
 char brightnessStepStrip = STATUS_LED_STEP;  // thus use a char instead
+
 float accelMagnitude = 0;
 float smoothedAccel = 0;
 CRGB finalColourOfSingleLED;
-
 
 bool ButtonSaidGoToSleep = false;
 bool SleepModeHasBeenActivated = false;
@@ -83,41 +89,40 @@ const float ALPHA_SMOOTHING_FACTOR = 0.1;
 const float ACCEL_MINIMUM = 9.0;
 const float ACCEL_MAXIMUM = 15.0;
 
+OneButton button_intensityOnOff;
+OneButton button_cyclingOnOff;
+
 //-----------------------------------------------------------//
 
-void onSinglePressed() {
+void onSingleOnOffPressed() {
   switch (ledSystemStat) {
-    case LEDS_CYCLING: 
+    case LEDS_CYCLING:
       ledSystemStat = LEDS_TO_BE_TURNED_OFF;
       break;
     case LEDS_NO_CYCLING:
       ledSystemStat = LEDS_TO_BE_TURNED_ON;
-      break;      
+      break;
   } 
 }
 
 //-----------------------------------------------------------//
 
-class Button{
-private:
-  OneButton button;
-public:
-  explicit Button(uint8_t pin):button(pin) {
-    button.setClickMs(CLICK_MS_DURATION);
-    button.attachClick([](void *scope) { ((Button *) scope)->Clicked();}, this);
-  }
+void onSingleIntensityPressed() {
+}
 
-  void Clicked() {
-    onSinglePressed();
-  }
-
-  void read() {
-    button.tick();
-  }
-};
-
-Button button(BUTTON_PIN);
-
+void onSleepModeRequested(){
+  // Configuration du réveil par bouton (EXT0)
+  // LOW = se réveille quand le bouton est pressé (connecté à GND)
+  // errRc = esp_deep_sleep_enable_gpio_wakeup(1ull << WAKEUP_PIN, ESP_GPIO_WAKEUP_GPIO_HIGH);  // $$    <---  precise pinr
+  // errRc = esp_deep_sleep_enable_gpio_wakeup(1ull | 0b11111, ESP_GPIO_WAKEUP_GPIO_HIGH);  // all RTC pins can wake 0 to 5
+  esp_deep_sleep_enable_gpio_wakeup((1ULL << BUTTON_INTENSITY_PIN), ESP_GPIO_WAKEUP_GPIO_LOW);
+  strip.setBrightness(0);        // button pressed asked to turn off leds
+  strip.show();
+  ledOnBoard[0] = COLOUR_BLACK;
+  FastLED.show();
+  digitalWrite(MOSFET_CTRL_PIN, LOW);  // eteindre le courant de la led strip
+  esp_deep_sleep_start();
+}
 //-----------------------------------------------------------//
 
 bool GetWIFIHasBeenConnected() {
@@ -168,13 +173,13 @@ uint8_t GetUpdatedBrightness( uint8_t inputBrightness, char &Step  ) {
 
 //-----------------------------------------------------------//
 
-void rainbow() {  
+void rainbow() {
   if (ledSystemStat != LEDS_CYCLING) {
     return;
-  }  
+  }
 
   for(uint16_t i=0; i < LED_STRIP_COUNT; i++) {
-    strip.setPixelColor(i, Wheel((i + pixelCycle) & MAX_COLOUR)); //  Update delay time  
+    strip.setPixelColor(i, Wheel((i + pixelCycle) & MAX_COLOUR)); //  Update delay time
   }
   strip.setBrightness(brightnessStrip);
   strip.show();                             //  Update strip to match
@@ -190,6 +195,18 @@ void setup() {
   esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
 
   String MCUName;
+
+  /* Given that we can come back to slepp, we need to initialize the vars here, and not in declaration*/
+  isWifiConnected = false;
+  isMPUConnected = false;
+  pixelCycle = 0;
+
+  ButtonSaidGoToSleep = false;
+  SleepModeHasBeenActivated = false;
+  ledSystemStat = LEDS_CYCLING;
+
+  pinMode(MOSFET_CTRL_PIN, OUTPUT);
+  digitalWrite(MOSFET_CTRL_PIN, HIGH);  //open up the power
 
   strip.begin();           // INITIALIZE NeoPixel strip object (REQUIRED)
   strip.clear();
@@ -229,24 +246,30 @@ void setup() {
       if (!isWifiConnected && isMPUConnected) {  // only mpu6050 is conmected
          ledOnBoard[0] = COLOUR_ORANGE;
       }
-    } // there are no other condition, 
+    } // there are no other condition,
   }   //other than all disconnected, which is alread defined as RED, above
   finalColourOfSingleLED = ledOnBoard[0];
-  FastLED.show(); 
+  FastLED.show();
 
-  pinMode(BUTTON_PIN, INPUT_PULLUP);  
+  button_cyclingOnOff.setup(BUTTON_ONOFF_PIN, INPUT_PULLUP, true);
+  button_cyclingOnOff.attachClick(onSingleOnOffPressed);
+  button_cyclingOnOff.setClickMs(CLICK_MS_DURATION);
+
+  button_intensityOnOff.setup(BUTTON_INTENSITY_PIN, INPUT_PULLUP, true);
+  button_intensityOnOff.attachClick(onSleepModeRequested);
+  button_intensityOnOff.setClickMs(CLICK_MS_DURATION);
 }
 
 //-----------------------------------------------------------//
 
-void loop() { 
+void loop() {
   if (isWifiConnected) {
     ArduinoOTA.handle();
   }
 
-
   EVERY_N_MILLISECONDS(DELAY_BUTTON_READING) {
-    button.read();
+    button_cyclingOnOff.tick();
+    button_intensityOnOff.tick();
   }
 
   EVERY_N_MILLISECONDS(DELAY_BUTTON_READING) {
@@ -258,11 +281,9 @@ void loop() {
         strip.show();
         ledSystemStat = LEDS_TURNED_OFF;
         break;
-      case LEDS_TURNED_OFF:            // system has turned leds off, i.e: set them black and no mouyre cycling
-        //esp_sleep_enable_ext0_wakeup(BUTTON_PIN, 1);
-        //esp_deep_sleep_start();
+      case LEDS_TURNED_OFF:            // system has turned leds off, i.e: set them black and no more cycling
         ledOnBoard[0] = COLOUR_WHITE;
-        FastLED.show(); 
+        FastLED.show();
         ledSystemStat = LEDS_NO_CYCLING;
         break;
       case LEDS_TO_BE_TURNED_ON:       // button pressed asked to turn on leds
@@ -272,7 +293,7 @@ void loop() {
       case LEDS_TURNED_ON:             // system has turned leds on, i.e: resumed cycling
         ledOnBoard[0] = finalColourOfSingleLED;
         FastLED.setBrightness(brightnessStatus);
-        FastLED.show();      
+        FastLED.show();
         ledSystemStat = LEDS_CYCLING;
         break;
       case LEDS_PREPARE_FOR_SLEEP: break;  // future case
@@ -288,35 +309,34 @@ void loop() {
       sensors_event_t a, g, temp;
       mpu.getEvent(&a, &g, &temp);
       // Calculate acceleration magnitude
-      accelMagnitude = sqrt(a.acceleration.x * a.acceleration.x + 
-                            a.acceleration.y * a.acceleration.y + 
+      accelMagnitude = sqrt(a.acceleration.x * a.acceleration.x +
+                            a.acceleration.y * a.acceleration.y +
                             a.acceleration.z * a.acceleration.z);
 
       // Apply smoothing filter
       smoothedAccel = ALPHA_SMOOTHING_FACTOR * accelMagnitude + (1 - ALPHA_SMOOTHING_FACTOR) * smoothedAccel;
   
       // Map acceleration to LED intensity (0-255)
-      //brightnessStrip = map(constrain(smoothedAccel * 10, ACCEL_MINIMUM * 10, ACCEL_MAXIMUM * 10), 
+      //brightnessStrip = map(constrain(smoothedAccel * 10, ACCEL_MINIMUM * 10, ACCEL_MAXIMUM * 10),
       //                    ACCEL_MINIMUM * 10, 
       //                    ACCEL_MAXIMUM * 10, MIN_BRIGHTNESS, MAX_BRIGHTNESS);
       // on first attempts, it seems the brightness was going toward zero, when motionless.
-      // so it appears the system could use a minimum, all time. TBD                    
+      // so it appears the system could use a minimum, all time. TBD
     }
   }
 
   EVERY_N_MILLISECONDS(DELAY_STATUS_LED) {
-
     if (ledSystemStat == LEDS_CYCLING) {
       brightnessStatus = GetUpdatedBrightness(brightnessStatus, brightnessStepStatus);
       FastLED.setBrightness(brightnessStatus);
-      FastLED.show();         
+      FastLED.show();
     }  
   }
 
   EVERY_N_MILLISECONDS(DELAY_STRIP_BRIGHTNESS){
     if (ledSystemStat == LEDS_CYCLING) {
       brightnessStrip = GetUpdatedBrightness(brightnessStrip, brightnessStepStrip);
-    }  
+    }
   }
 
   EVERY_N_MILLISECONDS(DELAY_STRIPE_LEDS) {
