@@ -47,7 +47,8 @@
 #define COLOUR_WHITE  0xFFFFFF
 #define COLOUR_BLACK  0x000000
 
-#define CLICK_MS_DURATION 120
+#define CLICK_MS_DURATION 200
+#define DBLCLICK_MS_DURATION 800
 
 enum LedsActivityStatus {
   LEDS_CYCLING,            // system is normal
@@ -73,6 +74,7 @@ bool isMPUConnected = false;
 
 uint8_t brightnessStatus = FASTLED_BRIGHTNESS; 
 uint8_t brightnessStrip = FASTLED_BRIGHTNESS; 
+bool brightnessStripUpdating = true;
 char brightnessStepStatus = STATUS_LED_STEP; // these two willevolve between +1 and -1. a byte cannot go negative.
 char brightnessStepStrip = STATUS_LED_STEP;  // thus use a char instead
 
@@ -108,20 +110,26 @@ void onSingleOnOffPressed() {
 //-----------------------------------------------------------//
 
 void onSingleIntensityPressed() {
+  brightnessStripUpdating = !brightnessStripUpdating;
 }
 
-void onSleepModeRequested(){
-  // Configuration du réveil par bouton (EXT0)
-  // LOW = se réveille quand le bouton est pressé (connecté à GND)
-  // errRc = esp_deep_sleep_enable_gpio_wakeup(1ull << WAKEUP_PIN, ESP_GPIO_WAKEUP_GPIO_HIGH);  // $$    <---  precise pinr
-  // errRc = esp_deep_sleep_enable_gpio_wakeup(1ull | 0b11111, ESP_GPIO_WAKEUP_GPIO_HIGH);  // all RTC pins can wake 0 to 5
-  esp_deep_sleep_enable_gpio_wakeup((1ULL << BUTTON_INTENSITY_PIN), ESP_GPIO_WAKEUP_GPIO_LOW);
-  strip.setBrightness(0);        // button pressed asked to turn off leds
-  strip.show();
-  ledOnBoard[0] = COLOUR_BLACK;
-  FastLED.show();
-  digitalWrite(MOSFET_CTRL_PIN, LOW);  // eteindre le courant de la led strip
-  esp_deep_sleep_start();
+//-----------------------------------------------------------//
+
+void onSleepModeRequested(void *oneButton){
+  if (!SleepModeHasBeenActivated) {
+    SleepModeHasBeenActivated = true;  // so... won't be back here...
+    // Configuration du réveil par bouton (EXT0)
+    // LOW = se réveille quand le bouton est pressé (connecté à GND)
+    // errRc = esp_deep_sleep_enable_gpio_wakeup(1ull << WAKEUP_PIN, ESP_GPIO_WAKEUP_GPIO_HIGH);  // $$    <---  precise pinr
+    // errRc = esp_deep_sleep_enable_gpio_wakeup(1ull | 0b11111, ESP_GPIO_WAKEUP_GPIO_HIGH);  // all RTC pins can wake 0 to 5
+    esp_deep_sleep_enable_gpio_wakeup((1ULL << BUTTON_INTENSITY_PIN), ESP_GPIO_WAKEUP_GPIO_LOW);
+    strip.setBrightness(0);        // button pressed asked to turn off leds
+    strip.show();
+    ledOnBoard[0] = COLOUR_BLACK;
+    FastLED.show();
+    digitalWrite(MOSFET_CTRL_PIN, LOW);  // eteindre le courant de la led strip
+    esp_deep_sleep_start();
+  }  
 }
 //-----------------------------------------------------------//
 
@@ -196,7 +204,7 @@ void setup() {
 
   String MCUName;
 
-  /* Given that we can come back to slepp, we need to initialize the vars here, and not in declaration*/
+  /* Given that we can come back to sleep, we need to initialize the vars here, and not in declaration*/
   isWifiConnected = false;
   isMPUConnected = false;
   pixelCycle = 0;
@@ -204,6 +212,7 @@ void setup() {
   ButtonSaidGoToSleep = false;
   SleepModeHasBeenActivated = false;
   ledSystemStat = LEDS_CYCLING;
+  brightnessStripUpdating = true;
 
   pinMode(MOSFET_CTRL_PIN, OUTPUT);
   digitalWrite(MOSFET_CTRL_PIN, HIGH);  //open up the power
@@ -256,8 +265,10 @@ void setup() {
   button_cyclingOnOff.setClickMs(CLICK_MS_DURATION);
 
   button_intensityOnOff.setup(BUTTON_INTENSITY_PIN, INPUT_PULLUP, true);
-  button_intensityOnOff.attachClick(onSleepModeRequested);
+  button_intensityOnOff.attachClick(onSingleIntensityPressed);
   button_intensityOnOff.setClickMs(CLICK_MS_DURATION);
+  button_intensityOnOff.setLongPressIntervalMs(DBLCLICK_MS_DURATION);
+  button_intensityOnOff.attachLongPressStop(onSleepModeRequested, &button_intensityOnOff);
 }
 
 //-----------------------------------------------------------//
@@ -335,7 +346,11 @@ void loop() {
 
   EVERY_N_MILLISECONDS(DELAY_STRIP_BRIGHTNESS){
     if (ledSystemStat == LEDS_CYCLING) {
-      brightnessStrip = GetUpdatedBrightness(brightnessStrip, brightnessStepStrip);
+      if (brightnessStripUpdating) {
+        brightnessStrip = GetUpdatedBrightness(brightnessStrip, brightnessStepStrip);
+      } else {
+        brightnessStrip = MAX_BRIGHTNESS;
+      }  
     }
   }
 
