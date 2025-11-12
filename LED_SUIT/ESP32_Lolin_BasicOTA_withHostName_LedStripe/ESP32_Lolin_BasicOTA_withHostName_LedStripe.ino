@@ -25,7 +25,7 @@
 #define LED_ONBOARD_COUNT   1
 #define LED_STRIP_COUNT    25
 #define FASTLED_LED_TYPE   WS2812B
-#define FASTLED_VOLTS      5//3.3
+#define FASTLED_VOLTS      5
 #define FASTLED_MAX_MA     700
 #define FASTLED_BRIGHTNESS 128
 #define MAX_COLOUR 255
