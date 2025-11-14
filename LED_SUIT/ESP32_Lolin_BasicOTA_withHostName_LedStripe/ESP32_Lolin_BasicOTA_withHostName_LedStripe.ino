@@ -349,7 +349,7 @@ void loop() {
       if (brightnessStripUpdating) {
         brightnessStrip = GetUpdatedBrightness(brightnessStrip, brightnessStepStrip);
       } else {
-        brightnessStrip = MAX_BRIGHTNESS;
+        brightnessStrip = 25;
       }  
     }
   }
