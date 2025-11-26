@@ -110,7 +110,11 @@ void onSingleOnOffPressed() {
 //-----------------------------------------------------------//
 
 void onSingleIntensityPressed() {
-  brightnessStripUpdating = !brightnessStripUpdating;
+  if (ledSystemStat == LEDS_NO_CYCLING) {
+    ledSystemStat = LEDS_TO_BE_TURNED_ON;
+  } else {
+    brightnessStripUpdating = !brightnessStripUpdating;
+  }  
 }
 
 //-----------------------------------------------------------//
