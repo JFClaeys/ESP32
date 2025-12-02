@@ -251,17 +251,17 @@ void setup() {
   }
 
   if (isWifiConnected && isMPUConnected) {  //both are connected
-    ledOnBoard[0] = COLOUR_GREEN;
+    finalColourOfSingleLED = COLOUR_GREEN;
   } else {
     if (isWifiConnected && !isMPUConnected) { // only wifi is connected
-      ledOnBoard[0] = COLOUR_BLUE;
+      finalColourOfSingleLED = COLOUR_BLUE;
     } else {
       if (!isWifiConnected && isMPUConnected) {  // only mpu6050 is conmected
-         ledOnBoard[0] = COLOUR_ORANGE;
+         finalColourOfSingleLED = COLOUR_ORANGE;
       }
     } // there are no other condition,
   }   //other than all disconnected, which is alread defined as RED, above
-  finalColourOfSingleLED = ledOnBoard[0];
+  ledOnBoard[0] = finalColourOfSingleLED;
   FastLED.show();
 
   button_cyclingOnOff.setup(BUTTON_ONOFF_PIN, INPUT_PULLUP, true);
