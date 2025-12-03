@@ -80,7 +80,7 @@ char brightnessStepStrip = STATUS_LED_STEP;  // thus use a char instead
 
 float accelMagnitude = 0;
 float smoothedAccel = 0;
-CRGB finalColourOfSingleLED;
+uint32_t finalColourOfSingleLED;
 
 bool ButtonSaidGoToSleep = false;
 bool SleepModeHasBeenActivated = false;
@@ -93,6 +93,24 @@ const float ACCEL_MAXIMUM = 15.0;
 
 OneButton button_intensityOnOff;
 OneButton button_cyclingOnOff;
+
+
+void setStatusLEDColor(uint32_t thisColor){
+  uint8_t r = (thisColor >> 16) & 0xFF;
+  uint8_t g = (thisColor >> 8) & 0xFF;
+  uint8_t b = thisColor & 0xFF;
+  ledOnBoard[0] = CRGB(r, g, b);
+  FastLED.show();
+}
+
+//-----------------------------------------------------------//
+
+void setStatusLEDBrightness(uint8_t thisBrightness, bool doShow = true){
+  FastLED.setBrightness(thisBrightness);
+  if (doShow) {
+    FastLED.show();
+  }
+}
 
 //-----------------------------------------------------------//
 
@@ -129,8 +147,7 @@ void onSleepModeRequested(void *oneButton){
     esp_deep_sleep_enable_gpio_wakeup((1ULL << BUTTON_INTENSITY_PIN), ESP_GPIO_WAKEUP_GPIO_LOW);
     strip.setBrightness(0);        // button pressed asked to turn off leds
     strip.show();
-    ledOnBoard[0] = COLOUR_BLACK;
-    FastLED.show();
+    setStatusLEDColor(COLOUR_BLACK);
     digitalWrite(MOSFET_CTRL_PIN, LOW);  // eteindre le courant de la led strip
     esp_deep_sleep_start();
   }  
@@ -228,8 +245,9 @@ void setup() {
 
   FastLED.setMaxPowerInVoltsAndMilliamps(FASTLED_VOLTS, FASTLED_MAX_MA);
   FastLED.addLeds<FASTLED_LED_TYPE, LED_PIN_ONBOARD, FASTLED_STRIP_COLOR_ORDER>(ledOnBoard, LED_ONBOARD_COUNT);
-  ledOnBoard[0] = COLOUR_RED;
-  FastLED.show();
+
+  finalColourOfSingleLED = COLOUR_RED;
+  setStatusLEDColor(finalColourOfSingleLED);
 
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);
@@ -261,8 +279,7 @@ void setup() {
       }
     } // there are no other condition,
   }   //other than all disconnected, which is alread defined as RED, above
-  ledOnBoard[0] = finalColourOfSingleLED;
-  FastLED.show();
+  setStatusLEDColor(finalColourOfSingleLED);
 
   button_cyclingOnOff.setup(BUTTON_ONOFF_PIN, INPUT_PULLUP, true);
   button_cyclingOnOff.attachClick(onSingleOnOffPressed);
@@ -297,8 +314,7 @@ void loop() {
         ledSystemStat = LEDS_TURNED_OFF;
         break;
       case LEDS_TURNED_OFF:            // system has turned leds off, i.e: set them black and no more cycling
-        ledOnBoard[0] = COLOUR_WHITE;
-        FastLED.show();
+        setStatusLEDColor(COLOUR_WHITE);
         ledSystemStat = LEDS_NO_CYCLING;
         break;
       case LEDS_TO_BE_TURNED_ON:       // button pressed asked to turn on leds
@@ -306,9 +322,8 @@ void loop() {
         ledSystemStat = LEDS_TURNED_ON;
         break;
       case LEDS_TURNED_ON:             // system has turned leds on, i.e: resumed cycling
-        ledOnBoard[0] = finalColourOfSingleLED;
-        FastLED.setBrightness(brightnessStatus);
-        FastLED.show();
+        setStatusLEDBrightness(brightnessStatus, false);
+        setStatusLEDColor(finalColourOfSingleLED);
         ledSystemStat = LEDS_CYCLING;
         break;
       case LEDS_PREPARE_FOR_SLEEP: break;  // future case
@@ -343,8 +358,7 @@ void loop() {
   EVERY_N_MILLISECONDS(DELAY_STATUS_LED) {
     if (ledSystemStat == LEDS_CYCLING) {
       brightnessStatus = GetUpdatedBrightness(brightnessStatus, brightnessStepStatus);
-      FastLED.setBrightness(brightnessStatus);
-      FastLED.show();
+      setStatusLEDBrightness(brightnessStatus);
     }  
   }
 
