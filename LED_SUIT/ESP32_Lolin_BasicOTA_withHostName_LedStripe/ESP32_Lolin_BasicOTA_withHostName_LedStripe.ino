@@ -94,6 +94,21 @@ const float ACCEL_MAXIMUM = 15.0;
 OneButton button_intensityOnOff;
 OneButton button_cyclingOnOff;
 
+void SetStriLEDpInit() {
+  strip.begin();           // INITIALIZE NeoPixel strip object (REQUIRED)
+  strip.clear();
+  strip.show();            // Turn OFF all pixels ASAP
+  strip.setBrightness(MAX_BRIGHTNESS); // Set BRIGHTNESS to about 1/5 (max = 255)
+}
+
+//-----------------------------------------------------------//
+
+void SetStatusLEDInit(){
+  FastLED.setMaxPowerInVoltsAndMilliamps(FASTLED_VOLTS, FASTLED_MAX_MA);
+  FastLED.addLeds<FASTLED_LED_TYPE, LED_PIN_ONBOARD, FASTLED_STRIP_COLOR_ORDER>(ledOnBoard, LED_ONBOARD_COUNT);  
+}
+
+//-----------------------------------------------------------//
 
 void setStatusLEDColor(uint32_t thisColor){
   uint8_t r = (thisColor >> 16) & 0xFF;
@@ -110,6 +125,27 @@ void setStatusLEDBrightness(uint8_t thisBrightness, bool doShow = true){
   if (doShow) {
     FastLED.show();
   }
+}
+
+//-----------------------------------------------------------//
+
+void SetStripLEDBrightness(uint8_t thisBrightness, bool doShow = true){
+  strip.setBrightness(thisBrightness);  
+  if (doShow) {  
+    strip.show();
+  }  
+}  
+
+//-----------------------------------------------------------//
+
+uint8_t GetUpdatedBrightness( uint8_t inputBrightness, char &Step  ) {
+   inputBrightness += Step;
+
+  // Inverser la direction du changement d'intensité aux limites
+  if ((inputBrightness <= 0) || (inputBrightness >= random(230, MAX_BRIGHTNESS))) {
+    Step = -Step;
+  }
+  return inputBrightness;
 }
 
 //-----------------------------------------------------------//
@@ -145,8 +181,7 @@ void onSleepModeRequested(void *oneButton){
     // errRc = esp_deep_sleep_enable_gpio_wakeup(1ull << WAKEUP_PIN, ESP_GPIO_WAKEUP_GPIO_HIGH);  // $$    <---  precise pinr
     // errRc = esp_deep_sleep_enable_gpio_wakeup(1ull | 0b11111, ESP_GPIO_WAKEUP_GPIO_HIGH);  // all RTC pins can wake 0 to 5
     esp_deep_sleep_enable_gpio_wakeup((1ULL << BUTTON_INTENSITY_PIN), ESP_GPIO_WAKEUP_GPIO_LOW);
-    strip.setBrightness(0);        // button pressed asked to turn off leds
-    strip.show();
+    SetStripLEDBrightness(0);      // button pressed asked to turn off leds
     setStatusLEDColor(COLOUR_BLACK);
     digitalWrite(MOSFET_CTRL_PIN, LOW);  // eteindre le courant de la led strip
     esp_deep_sleep_start();
@@ -190,18 +225,6 @@ uint32_t Wheel(byte WheelPos) {
 
 //-----------------------------------------------------------//
 
-uint8_t GetUpdatedBrightness( uint8_t inputBrightness, char &Step  ) {
-   inputBrightness += Step;
-
-  // Inverser la direction du changement d'intensité aux limites
-  if ((inputBrightness <= 0) || (inputBrightness >= random(230, MAX_BRIGHTNESS))) {
-    Step = -Step;
-  }
-  return inputBrightness;
-}
-
-//-----------------------------------------------------------//
-
 void rainbow() {
   if (ledSystemStat != LEDS_CYCLING) {
     return;
@@ -210,8 +233,7 @@ void rainbow() {
   for(uint16_t i=0; i < LED_STRIP_COUNT; i++) {
     strip.setPixelColor(i, Wheel((i + pixelCycle) & MAX_COLOUR)); //  Update delay time
   }
-  strip.setBrightness(brightnessStrip);
-  strip.show();                             //  Update strip to match
+  SetStripLEDBrightness(brightnessStrip);//  Update strip to match  
   pixelCycle++;                             //  Advance current cycle
   if(pixelCycle >= MAX_COLOUR+1)
     pixelCycle = 0;                         //  Loop the cycle back to the begining
@@ -238,14 +260,10 @@ void setup() {
   pinMode(MOSFET_CTRL_PIN, OUTPUT);
   digitalWrite(MOSFET_CTRL_PIN, HIGH);  //open up the power
 
-  strip.begin();           // INITIALIZE NeoPixel strip object (REQUIRED)
-  strip.clear();
-  strip.show();            // Turn OFF all pixels ASAP
-  strip.setBrightness(MAX_BRIGHTNESS); // Set BRIGHTNESS to about 1/5 (max = 255)
+  SetStriLEDpInit(); 
+  //SetStripLEDBrightness(MAX_BRIGHTNESS);   // Turn OFF all pixels ASAP
 
-  FastLED.setMaxPowerInVoltsAndMilliamps(FASTLED_VOLTS, FASTLED_MAX_MA);
-  FastLED.addLeds<FASTLED_LED_TYPE, LED_PIN_ONBOARD, FASTLED_STRIP_COLOR_ORDER>(ledOnBoard, LED_ONBOARD_COUNT);
-
+  SetStatusLEDInit();
   finalColourOfSingleLED = COLOUR_RED;
   setStatusLEDColor(finalColourOfSingleLED);
 
@@ -309,8 +327,7 @@ void loop() {
       case LEDS_CYCLING: break;        // normal
       case LEDS_NO_CYCLING: break;     // system is silent.
       case LEDS_TO_BE_TURNED_OFF:
-        strip.setBrightness(0);        // button pressed asked to turn off leds
-        strip.show();
+        SetStripLEDBrightness(0);      // button pressed asked to turn off leds
         ledSystemStat = LEDS_TURNED_OFF;
         break;
       case LEDS_TURNED_OFF:            // system has turned leds off, i.e: set them black and no more cycling
@@ -318,7 +335,7 @@ void loop() {
         ledSystemStat = LEDS_NO_CYCLING;
         break;
       case LEDS_TO_BE_TURNED_ON:       // button pressed asked to turn on leds
-        strip.setBrightness(brightnessStrip);
+        SetStripLEDBrightness(brightnessStrip, false);
         ledSystemStat = LEDS_TURNED_ON;
         break;
       case LEDS_TURNED_ON:             // system has turned leds on, i.e: resumed cycling
