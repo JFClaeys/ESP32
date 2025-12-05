@@ -63,7 +63,7 @@ enum LedsActivityStatus {
 Adafruit_MPU6050 mpu;      // connected to pins 10 and 8 (SCL / SDA) . no interrupt pin (yet)
 
 Adafruit_NeoPixel strip(LED_STRIP_COUNT, LED_PIN_STRIP, NEO_GRB + NEO_KHZ800);
-CRGBArray<LED_ONBOARD_COUNT> ledOnBoard;
+CRGBArray<LED_ONBOARD_COUNT> ledOnBoard;//GRB
 
 int  pixelCycle = 0;  // Pattern Pixel Cycle
 
@@ -139,13 +139,15 @@ void SetStripLEDBrightness(uint8_t thisBrightness, bool doShow = true){
 //-----------------------------------------------------------//
 
 uint8_t GetUpdatedBrightness( uint8_t inputBrightness, char &Step  ) {
-   inputBrightness += Step;
 
-  // Inverser la direction du changement d'intensité aux limites
-  if ((inputBrightness <= 0) || (inputBrightness >= random(230, MAX_BRIGHTNESS))) {
-    Step = -Step;
+  if (inputBrightness <= 1) {
+    Step = 1;
+  } else {
+     if (inputBrightness >= 255) {
+       Step = -1;
+    }  
   }
-  return inputBrightness;
+  return inputBrightness += Step;
 }
 
 //-----------------------------------------------------------//
