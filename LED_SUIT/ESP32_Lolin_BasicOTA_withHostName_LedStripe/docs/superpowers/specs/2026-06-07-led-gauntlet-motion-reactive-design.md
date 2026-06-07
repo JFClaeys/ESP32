@@ -27,7 +27,7 @@ option that was chosen:
 | [`diagrams/colormap.html`](diagrams/colormap.html) | How should motion change the rainbow? | **B — channel push** (C = hue shift as fallback flavor) |
 | [`diagrams/power.html`](diagrams/power.html) | LED rail: boost to 5 V vs direct 3.7 V (+ wiring gotchas) | **Option 1 — 5 V boost rail** |
 | [`diagrams/power-tree.html`](diagrams/power-tree.html) | How both rails come from one battery; THT parts | confirms Option 1; IRLZ44N is the THT switch |
-| [`diagrams/switch.html`](diagrams/switch.html) | Correct power-switch wiring | **IRLZ44N low-side**, blank data before sleep |
+| [`diagrams/switch.html`](diagrams/switch.html) | Correct power-switch wiring | **Logic-level N-FET, low-side** (see BOM for part), blank data before sleep |
 
 ## Decisions made during brainstorming
 
@@ -38,7 +38,7 @@ option that was chosen:
 | Color behavior | **Channel push** (rainbow base, push red/green channel, dim the others) | User preference; dimming off-channels keeps it vivid (avoids "muddy") |
 | LED rail | **Boost to a steady 5 V** | Full, true color and constant brightness as the battery drains |
 | Level shifter | **74AHCT125 (DIP-14)** powered from 5 V only | Reads 3.3 V GPIO as a valid HIGH; gives clean 5 V data into the strip |
-| Power switch | **IRLZ44N (TO-220, logic-level)** low-side | Through-hole; handles >>1.3 A; the original part — the 4N35 opto is removed from the power path |
+| Power switch | **IRLB8721PbF (TO-220, logic-level)** low-side; IRLZ44N / STP55NF06L as alternates | Through-hole; fully on from a 3.3 V gate; handles >>1.3 A; the 4N35 opto is removed from the power path |
 | Brightness | **Reacts to swing strength** with a hard floor | Tunable; floor fixes the prior "brightness → 0 when still" problem |
 
 ## Hardware
@@ -47,8 +47,18 @@ option that was chosen:
 
 - **MT3608-class boost module** (THT): set output to 5.0 V; size for ≥1.5 A continuous.
 - **74AHCT125** in DIP-14 (THT): one buffer used for data level shifting.
-- **IRLZ44N** (TO-220, THT): restore as the low-side switch. (Lighter THT alternatives:
-  `IRLB8721`, `FQP30N06L`.)
+- **Low-side power MOSFET** (TO-220, THT, logic-level): one of, in order of preference —
+
+  | Part | Why | Notes |
+  |---|---|---|
+  | **IRLB8721PbF** (primary) | Modern default; optimized for low-Vgs (fully on well below 3.3 V), very low R_ds(on), cheap, widely stocked | Closest "better IRLZ44N" |
+  | **STP55NF06L** | Modern ST part, very low R_ds(on), well stocked | Good second source |
+  | **FQP30N06L** | Cheapest/ubiquitous; Vgs(th) up to 2.5 V so slightly less enhanced at 3.3 V (fine at 1.3 A) | Avoid if ever PWM-switching hard |
+  | **IRLZ44N** | The original; older but perfectly serviceable | Use what you have if on hand |
+
+  Wiring is identical for all: gate ← GPIO21 via ~220 Ω, 10 kΩ pulldown gate→GND.
+  At ~1.3 A on/off the choice is about gate-drive margin and availability, not heat
+  (dissipation is tens of mW for any of them).
 - LiPo 1S pack with enough C-rating for ~2 A peaks (boost input current at full white).
 - **Remove:** 4N35 optocoupler from the power path (it cannot carry the strip current;
   ~150 mA absolute max, low CTR).
@@ -61,8 +71,8 @@ option that was chosen:
 - Battery → Lolin C3 Pico onboard regulator → 3.3 V → ESP32 (existing, unchanged).
 - Battery → boost module → **5 V rail** → strip V+ **and** 74AHCT125 VCC.
 - GPIO1 (3.3 V data) → 74AHCT125 input → **5 V data** → strip DIN.
-- Strip GND → IRLZ44N drain; IRLZ44N source → battery GND. **Common ground throughout.**
-- Gate of IRLZ44N ← GPIO21 (`MOSFET_CTRL_PIN`) via ~220 Ω, with 10 kΩ pulldown gate→GND.
+- Strip GND → MOSFET drain; MOSFET source → battery GND. **Common ground throughout.**
+- Gate of MOSFET ← GPIO21 (`MOSFET_CTRL_PIN`) via ~220 Ω, with 10 kΩ pulldown gate→GND.
 
 ### Power switch note (low-side switching gotcha)
 
