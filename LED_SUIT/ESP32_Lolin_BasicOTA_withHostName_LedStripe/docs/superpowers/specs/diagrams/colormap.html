@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How should motion change the colors?</title>
+<style>
+  :root { --bg:#0e1116; --card:#171c24; --line:#2a323d; --ink:#e6edf3; --sub:#9aa7b4;
+          --green:#39d353; --accent:#4da3ff; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+         font:16px/1.5 system-ui,Segoe UI,Roboto,sans-serif; padding:28px; }
+  h1 { font-size:22px; margin:0 0 4px; }
+  .sub { color:var(--sub); margin:0 0 22px; max-width:900px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px;
+          padding:16px 18px; margin-bottom:16px; max-width:900px; }
+  .card h3 { margin:0 0 2px; font-size:17px; }
+  .letter { display:inline-flex; width:26px; height:26px; border-radius:7px; align-items:center;
+            justify-content:center; background:var(--accent); color:#021; font-weight:700; margin-right:8px; }
+  .desc { color:var(--sub); font-size:14px; margin:6px 0 12px; }
+  .row { display:grid; grid-template-columns:120px 1fr; align-items:center; gap:12px; margin:7px 0; }
+  .rlbl { font-size:12px; color:var(--sub); text-align:right; }
+  .strip { display:flex; gap:2px; height:26px; }
+  .px { flex:1; border-radius:3px; }
+  .best { border-color:var(--green); }
+  .pill { font-size:11px; padding:2px 8px; border-radius:20px; background:#10331b; color:var(--green);
+          border:1px solid #1d5e32; float:right; }
+  code { background:#0b0e13; padding:1px 5px; border-radius:5px; }
+</style>
+</head>
+<body>
+  <h1>When the arm swings, how should the rainbow react?</h1>
+  <p class="sub">All four keep your existing rainbow as the <b>idle</b> look. They differ in what a forward swing (red) or backward swing (green) does to it, and how the swing's strength shows up. Each card shows the same three moments: idle, gentle backward swing, hard forward swing.</p>
+  <div id="root"></div>
+
+<script>
+const N = 25;
+function wheel(pos){ // mirrors your Wheel(): returns [r,g,b]
+  pos = 255 - (pos & 255);
+  if(pos<85) return [255-pos*3,0,pos*3];
+  if(pos<170){pos-=85;return [0,pos*3,255-pos*3];}
+  pos-=170;return [pos*3,255-pos*3,0];
+}
+const css=c=>`rgb(${c[0]|0},${c[1]|0},${c[2]|0})`;
+const lerp=(a,b,t)=>a+(b-a)*t;
+const mix=(a,b,t)=>[lerp(a[0],b[0],t),lerp(a[1],b[1],t),lerp(a[2],b[2],t)];
+const scale=(c,s)=>[c[0]*s,c[1]*s,c[2]*s];
+
+// signal: -1..+1 (neg=back/green, pos=fwd/red). mag=|signal|
+function pixels(mode, signal){
+  const out=[]; const mag=Math.abs(signal);
+  const target = signal>=0 ? [255,0,0] : [0,255,0];
+  for(let i=0;i<N;i++){
+    let base = wheel((i*256/N + 40)&255);
+    let c;
+    if(mode==='blend'){           // A: blend rainbow toward red/green by magnitude
+      c = mix(base, target, mag*0.85);
+    } else if(mode==='channel'){  // B: keep rainbow, push red or green channel, dim the other
+      c = base.slice();
+      if(signal>=0){ c[0]=lerp(c[0],255,mag); c[1]*=(1-mag*0.8); c[2]*=(1-mag*0.8); }
+      else { c[1]=lerp(c[1],255,mag); c[0]*=(1-mag*0.8); c[2]*=(1-mag*0.8); }
+    } else if(mode==='hue'){      // C: shift whole rainbow toward red or green end
+      const shift = signal*70;
+      c = wheel((i*256/N + 40 + shift)&255);
+      c = mix(c, target, mag*0.4);
+    } else {                      // D: comet — lit zone grows from wrist with swing strength
+      const lit = Math.round(mag*N);
+      const within = signal>=0 ? (i>=N-lit) : (i<lit);
+      c = within ? mix(base,target,0.7) : scale(base,0.15);
+    }
+    // brightness tracks strength: idle dimmer, hard swing brighter
+    const bri = lerp(0.55, 1.0, mag);
+    out.push(scale(c,bri));
+  }
+  return out;
+}
+function stripEl(mode,sig){
+  const d=document.createElement('div'); d.className='strip';
+  pixels(mode,sig).forEach(c=>{const p=document.createElement('div');p.className='px';p.style.background=css(c);d.appendChild(p);});
+  return d;
+}
+const MODES=[
+  {k:'blend', t:'Whole-strip blend', best:true,
+   d:'Rainbow stays, but every pixel slides toward red (fwd) or green (back). The harder the swing, the more the rainbow is overtaken. Smooth, unmistakable, dead simple to code.'},
+  {k:'channel', t:'Channel push', best:false,
+   d:'Keep each pixel’s rainbow hue but pump up its red (fwd) or green (back) and dim the others. Keeps more rainbow texture; can look muddy at full strength.'},
+  {k:'hue', t:'Hue shift', best:false,
+   d:'Rotate the entire rainbow toward the red end or green end. Subtle and elegant, but “forward vs backward” reads less obviously to a viewer.'},
+  {k:'comet', t:'Directional comet', best:false,
+   d:'A lit zone grows from one end of the gauntlet in the swing direction — length = strength. Very “gesture”, but more code and the rainbow mostly disappears during motion.'},
+];
+const root=document.getElementById('root');
+MODES.forEach((m,i)=>{
+  const c=document.createElement('div'); c.className='card'+(m.best?' best':'');
+  c.innerHTML = (m.best?'<span class="pill">recommended</span>':'')+
+    `<h3><span class="letter">${String.fromCharCode(65+i)}</span>${m.t}</h3>`+
+    `<p class="desc">${m.d}</p>`;
+  const rows=[['idle / still',0],['gentle backward',-0.4],['hard forward',0.95]];
+  rows.forEach(([lbl,sig])=>{
+    const r=document.createElement('div'); r.className='row';
+    const l=document.createElement('div'); l.className='rlbl'; l.textContent=lbl;
+    r.appendChild(l); r.appendChild(stripEl(m.k,sig)); c.appendChild(r);
+  });
+  root.appendChild(c);
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Power architecture options</title>
+<style>
+  :root { --bg:#0e1116; --card:#171c24; --line:#2a323d; --ink:#e6edf3; --sub:#9aa7b4;
+          --green:#39d353; --red:#ff5c5c; --accent:#4da3ff; --amber:#f0b32a; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+         font:15px/1.5 system-ui,Segoe UI,Roboto,sans-serif; padding:26px; }
+  h1 { font-size:22px; margin:0 0 4px; }
+  .sub { color:var(--sub); margin:0 0 22px; max-width:980px; }
+  .split { display:grid; grid-template-columns:1fr 1fr; gap:16px; max-width:1000px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px 18px; }
+  .card h3 { margin:0 0 2px; font-size:17px; }
+  .letter { display:inline-flex; width:26px; height:26px; border-radius:7px; align-items:center;
+            justify-content:center; background:var(--accent); color:#021; font-weight:700; margin-right:8px; }
+  .pill { font-size:11px; padding:2px 8px; border-radius:20px; float:right; }
+  .rec { background:#10331b; color:var(--green); border:1px solid #1d5e32; }
+  .min { background:#15233a; color:var(--accent); border:1px solid #234468; }
+  .best { border-color:var(--green); }
+  svg { width:100%; height:200px; background:#0b0e13; border-radius:10px; margin:8px 0 12px; }
+  text { fill:#cfd8e3; font:11px sans-serif; }
+  .box { fill:#1d2530; stroke:#3a4654; }
+  .wire { stroke:#c0392b; stroke-width:2; fill:none; }   /* power */
+  .gnd  { stroke:#7f8c8d; stroke-width:2; fill:none; }    /* gnd */
+  .data { stroke:#4da3ff; stroke-width:2; fill:none; stroke-dasharray:4 3; }
+  .pc { display:grid; grid-template-columns:1fr 1fr; gap:10px; font-size:13px; }
+  .pros h4{color:var(--green);margin:6px 0 4px;} .cons h4{color:var(--red);margin:6px 0 4px;}
+  ul{margin:0;padding-left:18px;} li{margin:2px 0;color:var(--sub);}
+  .gotcha { max-width:1000px; background:#1a1410; border:1px solid #5a4011; border-radius:14px;
+            padding:14px 18px; margin-top:18px; }
+  .gotcha h3{margin:0 0 8px;color:var(--amber);}
+  .gotcha b{color:var(--ink);} code{background:#0b0e13;padding:1px 5px;border-radius:5px;}
+  .leg{font-size:12px;color:var(--sub);margin-top:6px}
+  .sw{display:inline-block;width:22px;height:0;border-top:2px solid;vertical-align:middle;margin:0 4px}
+</style>
+</head>
+<body>
+  <h1>Powering it: LiPo 3.7&nbsp;V → ESP32 (3.3&nbsp;V) + 25× WS2812</h1>
+  <p class="sub">Your Lolin C3 Pico already makes its own 3.3&nbsp;V from the battery (onboard regulator + charger), so the ESP32 is handled either way. The real decision is the <b>LED rail</b>: boost the battery up to a steady 5&nbsp;V, or drive the strip straight off the raw battery. Legend:
+    <span class="sw" style="border-color:#c0392b"></span>power
+    <span class="sw" style="border-color:#7f8c8d"></span>GND
+    <span class="sw" style="border-color:#4da3ff;border-top-style:dashed"></span>data</p>
+
+  <div class="split">
+    <!-- Option 1: boost rail -->
+    <div class="card best">
+      <span class="pill rec">recommended for a costume</span>
+      <h3><span class="letter">1</span>5&nbsp;V boost rail + level shifter</h3>
+      <svg viewBox="0 0 460 200">
+        <rect class="box" x="10" y="80" width="70" height="40" rx="6"/><text x="20" y="104">LiPo 3.7V</text>
+        <rect class="box" x="120" y="80" width="70" height="40" rx="6"/><text x="128" y="98">Boost</text><text x="132" y="112">→ 5V</text>
+        <rect class="box" x="120" y="150" width="80" height="36" rx="6"/><text x="128" y="172">ESP32 (3V3)</text>
+        <rect class="box" x="240" y="60" width="80" height="36" rx="6"/><text x="248" y="76">74AHCT125</text><text x="252" y="90">shifter</text>
+        <rect class="box" x="370" y="80" width="80" height="40" rx="6"/><text x="378" y="98">WS2812</text><text x="384" y="112">×25 @5V</text>
+        <!-- power wires -->
+        <path class="wire" d="M80,90 L120,90"/>
+        <path class="wire" d="M190,90 L240,78"/>
+        <path class="wire" d="M320,78 L370,90"/>
+        <path class="wire" d="M155,120 L155,150"/>
+        <path class="wire" d="M190,100 L210,100 L210,135 L355,135 L355,95 L370,95" opacity="0.5"/>
+        <!-- data 3v3 from esp -> shifter -> strip -->
+        <path class="data" d="M200,165 L260,165 L260,96"/>
+        <path class="data" d="M320,84 L345,84 L345,100 L370,100"/>
+        <text x="205" y="160">3V3 data</text><text x="324" y="80">5V data</text>
+      </svg>
+      <div class="pc">
+        <div class="pros"><h4>Pros</h4><ul>
+          <li>WS2812 at nominal 5V: full, true colors</li>
+          <li>Brightness stays constant as battery drains</li>
+          <li>Rock-solid data at 5V via cheap 74AHCT125</li>
+        </ul></div>
+        <div class="cons"><h4>Cons</h4><ul>
+          <li>Two extra parts (boost + shifter)</li>
+          <li>Boost must handle ~1.3A peak; small idle draw</li>
+          <li>Slightly more bulk/heat on the wrist</li>
+        </ul></div>
+      </div>
+    </div>
+
+    <!-- Option 2: direct drive -->
+    <div class="card">
+      <span class="pill min">minimal parts</span>
+      <h3><span class="letter">2</span>Direct drive off the battery (no boost)</h3>
+      <svg viewBox="0 0 460 200">
+        <rect class="box" x="10" y="80" width="70" height="40" rx="6"/><text x="20" y="104">LiPo 3.7V</text>
+        <rect class="box" x="150" y="150" width="80" height="36" rx="6"/><text x="158" y="172">ESP32 (3V3)</text>
+        <rect class="box" x="360" y="80" width="90" height="40" rx="6"/><text x="368" y="98">WS2812 ×25</text><text x="372" y="112">@3.7V</text>
+        <path class="wire" d="M80,95 L360,95"/>
+        <path class="wire" d="M45,120 L45,168 L150,168"/>
+        <path class="data" d="M230,165 L300,165 L300,108 L360,108"/>
+        <text x="250" y="160">3V3 data (ok)</text>
+        <text x="120" y="60" fill="#f0b32a">no level shifter needed</text>
+        <path class="gnd" d="M360,113 L320,113 L320,186 L60,186 L60,120" opacity="0.5"/>
+      </svg>
+      <div class="pc">
+        <div class="pros"><h4>Pros</h4><ul>
+          <li>Fewest parts, lightest, most efficient</li>
+          <li>No level shifter (3.3V data is plenty at 3.7V)</li>
+          <li>Less to fail; longer runtime</li>
+        </ul></div>
+        <div class="cons"><h4>Cons</h4><ul>
+          <li>LEDs dim + colors shift as pack sags to ~3.4V</li>
+          <li>Near empty (&lt;3.4V) some WS2812 glitch/flicker</li>
+          <li>Brightness varies with charge state</li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="gotcha">
+    <h3>⚠ Two things in your current diagram worth fixing either way</h3>
+    <p style="margin:4px 0"><b>1. Low-side switching can back-power the strip through the data pin.</b>
+      Your IRLZ44N cuts the strip's <b>GND</b>. When it's off but the ESP32 still holds the data line at 3.3V, current sneaks in through the WS2812's data-pin clamp diode — you get a faint glow, leakage, or odd latch-up during "off"/sleep. Fixes: drive <code>data LOW</code> (and the strip clear) <i>before</i> cutting power, and/or switch the <b>high side</b> (V+) instead of GND. You already set brightness 0 before sleep — also push a black <code>strip.show()</code> and idle the pin.</p>
+    <p style="margin:4px 0"><b>2. IRLZ44N is huge for a wearable.</b> It's a TO-220 power MOSFET rated for tens of amps. For ~1.3A you can use a tiny logic-level part (e.g. AO3400 / DMG2305 in SOT-23) — far lighter on the gauntlet, still logic-level gate-friendly. Keep your 10kΩ pull on the gate.</p>
+  </div>
+</body>
+</html>

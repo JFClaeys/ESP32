@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Power tree — both options</title>
+<style>
+  :root { --bg:#0e1116; --card:#171c24; --line:#2a323d; --ink:#e6edf3; --sub:#9aa7b4;
+          --green:#39d353; --red:#ff5c5c; --accent:#4da3ff; --amber:#f0b32a; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+         font:15px/1.5 system-ui,Segoe UI,Roboto,sans-serif; padding:26px; }
+  h1 { font-size:21px; margin:0 0 4px; }
+  .sub { color:var(--sub); margin:0 0 18px; max-width:960px; }
+  .split { display:grid; grid-template-columns:1fr 1fr; gap:16px; max-width:1040px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px 18px; }
+  .card h3 { margin:0 0 2px; font-size:17px; }
+  .pill { font-size:11px; padding:2px 8px; border-radius:20px; float:right; }
+  .rec { background:#10331b; color:var(--green); border:1px solid #1d5e32; }
+  .min { background:#15233a; color:var(--accent); border:1px solid #234468; }
+  .best { border-color:var(--green); }
+  svg { width:100%; height:300px; background:#0b0e13; border-radius:10px; margin:6px 0 8px; }
+  text { fill:#cfd8e3; font:11.5px sans-serif; }
+  .box { fill:#1d2530; stroke:#3a4654; }
+  .bat { fill:#22311d; stroke:#3c5a2c; }
+  .conv{ fill:#2a2433; stroke:#4a3a5e; }
+  .pwr { stroke:#c0392b; stroke-width:2.5; fill:none; }
+  .data{ stroke:#4da3ff; stroke-width:2.5; fill:none; stroke-dasharray:5 3; }
+  .tht{font-size:10.5px;fill:#f0b32a}
+  ul{margin:8px 0;padding-left:18px} li{color:var(--sub);margin:3px 0;font-size:13px}
+  b.g{color:var(--green)} b.a{color:var(--amber)} code{background:#0b0e13;padding:1px 4px;border-radius:5px}
+</style>
+</head>
+<body>
+  <h1>Power tree — only ONE thing differs between the two builds</h1>
+  <p class="sub">Both feed the ESP32 the same way (battery → the board's own regulator). The only difference is the LED branch: a boost to 5&nbsp;V, or a straight tap of the raw battery. Every part shown is available in <b class="a">through-hole</b>.</p>
+
+  <div class="split">
+    <!-- Option 1 -->
+    <div class="card best">
+      <span class="pill rec">full brightness</span>
+      <h3>Option 1 — boost the LED branch to 5 V</h3>
+      <svg viewBox="0 0 470 300">
+        <rect class="bat" x="20" y="120" width="90" height="50" rx="7"/><text x="30" y="142">LiPo 1S</text><text x="30" y="158">3.0–4.2V</text>
+        <!-- esp branch -->
+        <rect class="box" x="200" y="40" width="110" height="44" rx="6"/><text x="210" y="60">C3 Pico LDO</text><text x="210" y="76" class="tht">(on the board)</text>
+        <rect class="box" x="350" y="40" width="100" height="44" rx="6"/><text x="362" y="60">ESP32 3.3V</text><text x="360" y="76" class="lbl">~0.15A</text>
+        <!-- led branch -->
+        <rect class="conv" x="200" y="200" width="110" height="46" rx="6"/><text x="212" y="220">Boost →5V</text><text x="212" y="236" class="tht">MT3608 module</text>
+        <rect class="box" x="350" y="150" width="100" height="40" rx="6"/><text x="360" y="174">74AHCT125</text>
+        <rect class="box" x="350" y="210" width="100" height="44" rx="6"/><text x="360" y="230">WS2812×25</text><text x="360" y="246" class="lbl">~1.3A @5V</text>
+        <!-- wires -->
+        <path class="pwr" d="M110,135 L160,135 L160,62 L200,62"/>
+        <path class="pwr" d="M310,62 L350,62"/>
+        <path class="pwr" d="M110,150 L160,150 L160,223 L200,223"/>
+        <path class="pwr" d="M310,223 L330,223 L330,170 L350,170"/>
+        <path class="pwr" d="M310,212 L350,232" opacity="0.6"/>
+        <text x="318" y="200">5V→shifter VCC</text>
+        <path class="data" d="M362,84 L362,120 L335,120 L335,182 L350,182"/>
+        <text x="250" y="115">GPIO1 3V3 data</text>
+        <path class="data" d="M450,178 L462,178 L462,224 L450,224" opacity="0.8"/>
+        <text x="404" y="200" class="tht">5V data</text>
+      </svg>
+      <ul>
+        <li>Adds <b>one</b> converter (boost) + a DIP-14 <code>74AHCT125</code>. Both THT.</li>
+        <li>Shifter runs on the 5V rail only — reads your 3.3V signal fine.</li>
+        <li>Constant brightness/true color as the battery drains.</li>
+        <li>Battery must source ~<b>2A</b> peaks (through the boost) → use a decent-C 1S pack.</li>
+      </ul>
+    </div>
+
+    <!-- Option 2 -->
+    <div class="card">
+      <span class="pill min">simplest</span>
+      <h3>Option 2 — LEDs straight off the battery</h3>
+      <svg viewBox="0 0 470 300">
+        <rect class="bat" x="20" y="120" width="90" height="50" rx="7"/><text x="30" y="142">LiPo 1S</text><text x="30" y="158">3.0–4.2V</text>
+        <rect class="box" x="200" y="40" width="110" height="44" rx="6"/><text x="210" y="60">C3 Pico LDO</text><text x="210" y="76" class="tht">(on the board)</text>
+        <rect class="box" x="350" y="40" width="100" height="44" rx="6"/><text x="362" y="60">ESP32 3.3V</text>
+        <rect class="box" x="350" y="200" width="100" height="46" rx="6"/><text x="360" y="222">WS2812×25</text><text x="360" y="240" class="lbl">~1.3A @3.7V</text>
+        <path class="pwr" d="M110,135 L160,135 L160,62 L200,62"/>
+        <path class="pwr" d="M310,62 L350,62"/>
+        <path class="pwr" d="M110,150 L160,150 L160,223 L350,223"/>
+        <path class="data" d="M362,84 L362,150 L330,150 L330,210 L350,210"/>
+        <text x="240" y="140">GPIO1 3V3 data</text>
+        <text x="170" y="245" class="tht">no boost, no shifter</text>
+      </svg>
+      <ul>
+        <li>No converter, no shifter. Only the battery + the MOSFET switch.</li>
+        <li>3.3V data is fine into a 3.7V strip (threshold ≈2.6V).</li>
+        <li>LEDs dim &amp; colors shift as the pack sags; possible flicker &lt;3.4V.</li>
+        <li>Lightest, most efficient, longest runtime, fewest failure points.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="card" style="max-width:1040px;margin-top:16px">
+    <h3 style="margin:0 0 6px">The MOSFET — you were right to reach for through-hole</h3>
+    <p class="sub" style="margin:0 0 6px">Forget my SMD suggestion. For THT, your original <b>IRLZ44N is genuinely the correct kind of part</b> — TO-220 through-hole, logic-level gate (turns on fully at 3.3V), handles many times 1.3A. The only "mistake" earlier was replacing it with the 4N35 opto in the power path. So the fix is simply: <b class="g">go back to the IRLZ44N</b> (or a lighter TO-220 logic-level part like <code>IRLB8721</code> / <code>FQP30N06L</code> if you want less bulk).</p>
+    <p class="sub" style="margin:0"><b class="a">Trap to avoid:</b> the cheap blue <code>IRF520</code> MOSFET modules are <b>not</b> logic-level — they won't fully turn on at 3.3V. If you buy a module, make sure it's an IRLZ44 / D4184 (logic-level) one.</p>
+  </div>
+</body>
+</html>

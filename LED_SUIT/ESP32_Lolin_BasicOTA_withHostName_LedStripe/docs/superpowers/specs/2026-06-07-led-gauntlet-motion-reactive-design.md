@@ -16,6 +16,19 @@ power source, gated by a power switch during sleep/off.
 This design covers two things: (1) the **motion → color** firmware that is currently
 missing, and (2) **power-architecture hardening** (the LED rail and the power switch).
 
+## Visual references
+
+Interactive HTML diagrams used during brainstorming (open in a browser). Each records the
+option that was chosen:
+
+| Diagram | Question it framed | Choice |
+|---|---|---|
+| [`diagrams/motion.html`](diagrams/motion.html) | What does "forward/backward" physically mean? | **B — arm swing about the shoulder** |
+| [`diagrams/colormap.html`](diagrams/colormap.html) | How should motion change the rainbow? | **B — channel push** (C = hue shift as fallback flavor) |
+| [`diagrams/power.html`](diagrams/power.html) | LED rail: boost to 5 V vs direct 3.7 V (+ wiring gotchas) | **Option 1 — 5 V boost rail** |
+| [`diagrams/power-tree.html`](diagrams/power-tree.html) | How both rails come from one battery; THT parts | confirms Option 1; IRLZ44N is the THT switch |
+| [`diagrams/switch.html`](diagrams/switch.html) | Correct power-switch wiring | **IRLZ44N low-side**, blank data before sleep |
+
 ## Decisions made during brainstorming
 
 | Decision | Choice | Why |
