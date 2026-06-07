@@ -110,7 +110,19 @@ keep a pure idle pulse instead.
 
 - No restructuring of the single-file `.ino` into modules.
 - No change to the mixed FastLED (status LED) / Adafruit_NeoPixel (strip) setup.
+  **This split is intentional, not accidental:** on the ESP32-C3, installing more than
+  one FastLED (RMT) controller causes continuous reboots, so the strip is driven by
+  Adafruit_NeoPixel on a second library instead. Do **not** merge both LED groups into
+  FastLED without first confirming the C3 multi-controller bug is resolved — doing so
+  reintroduces the reboot loop.
 - No rewrite of the rainbow / `Wheel()` math.
+
+### Possible future cleanup (separate effort)
+
+The user would prefer a single library (FastLED is more flexible than NeoPixel). Worth
+checking, as its own task, whether a newer FastLED release with the RMT5 / ESP-IDF 5
+driver fixes the C3 multi-controller crash — if so, the strip could move to FastLED and
+the NeoPixel dependency dropped. Out of scope for this feature.
 
 ## Deferred task
 
