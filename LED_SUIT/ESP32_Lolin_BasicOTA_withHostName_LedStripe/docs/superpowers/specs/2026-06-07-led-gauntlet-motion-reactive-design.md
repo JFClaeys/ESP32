@@ -45,7 +45,12 @@ option that was chosen:
 
 ### Bill of materials (additions / changes)
 
-- **MT3608-class boost module** (THT): set output to 5.0 V; size for ≥1.5 A continuous.
+- **XL6019 boost module** (THT): set output to 5.0 V. Chosen over the MT3608: the strip's
+  ~1.4 A at 5 V (≈7 W out) means ~2.2 A drawn from a 3.7 V cell on the *input* side, rising
+  to ~2.7 A as the cell sags toward 3.0 V. The MT3608's 2 A internal switch can't sustain
+  that; the XL6019's 5 A switch has comfortable margin. Confirm the specific module actually
+  starts and holds 5 V down to ~3.0 V input — some XL6009/XL6019 boards want ≥5 V in and
+  won't hold regulation from a single near-empty Li-ion.
 - **74AHCT125** in DIP-14 (THT): one buffer used for data level shifting.
 - **Low-side power MOSFET** (TO-220, THT, logic-level): one of, in order of preference —
 
@@ -59,7 +64,19 @@ option that was chosen:
   Wiring is identical for all: gate ← GPIO21 via ~220 Ω, 10 kΩ pulldown gate→GND.
   At ~1.3 A on/off the choice is about gate-drive margin and availability, not heat
   (dissipation is tens of mW for any of them).
-- LiPo 1S pack with enough C-rating for ~2 A peaks (boost input current at full white).
+- **Battery (1S Li-ion / LiPo)** — for this load the limiting spec is *discharge current*,
+  not capacity:
+  - **Capacity (mAh)** sets runtime only. The boost draws ~2.2–2.7 A from the cell at full
+    white, so usable runtime ≈ (pack mAh) ÷ ~2300 hours, e.g. a 2000 mAh pack ≈ 40 min flat-out.
+  - **Max discharge (C-rating × mAh)** decides whether the pack can feed the boost at all.
+    Require **≥ ~2.7 A continuous with ~30 % headroom** for LED transients. Quick check:
+    needed C ≥ 2.7 ÷ (pack mAh / 1000). A 500 mAh pouch at 1 C = 0.5 A → browns out; a
+    1500–2000 mAh pouch at ≥2 C = 3–4 A → fine.
+  - **18650** handles 5–10 A easily, so capacity and discharge are both non-issues — it's
+    only a size/wearability question. A flat LiPo pouch is smaller but you *must* verify its
+    C-rating, not just its mAh.
+  - **Protection board trip current:** many protected cells / BMS trip around 2–3 A. Ensure
+    the cutoff sits comfortably above the ~2.7 A peak, or it shuts off on bright frames.
 - **Remove:** 4N35 optocoupler from the power path (it cannot carry the strip current;
   ~150 mA absolute max, low CTR).
 
